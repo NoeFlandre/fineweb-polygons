@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import ahocorasick
 
 from fineweb_polygons.models import FineWebDocument, MatchEvidence, PolygonProfile
-from fineweb_polygons.normalization import normalize_for_search
+from fineweb_polygons.normalization import has_monaco_marker, normalize_for_search
 
 _FIELD_ORDER = ("text", "url")
 _CONTEXT_PHRASES = ("monaco", "principality of monaco")
@@ -23,8 +23,8 @@ class _MultiPatternMatcher:
             self._automaton.add_word(f" {pattern} ", pattern)
         self._automaton.make_automaton()
 
-    def find(self, value: str) -> frozenset[str]:
-        normalized = normalize_for_search(value)
+    def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
+        normalized = normalize_for_search(value, decode_url=decode_url)
         if not normalized:
             return frozenset()
         padded = f" {normalized} "
@@ -48,51 +48,119 @@ class EvidenceMatcher:
 
     def match(self, document: FineWebDocument) -> tuple[MatchEvidence, ...]:
         values = {"text": document.text, "url": document.url}
-        names_by_field = {
-            field: self._name_matcher.find(values[field]) for field in _FIELD_ORDER
-        }
-        contexts_by_field = {
-            field: self._context_matcher.find(values[field]) for field in _FIELD_ORDER
-        }
+        contexts_by_field, context_phrase = _find_context(values, self._context_matcher)
+        if context_phrase is None:
+            return ()
+        names_by_field = _find_names(values, self._name_matcher)
         matched_names = set().union(*names_by_field.values())
         if not matched_names:
             return ()
-        context_phrases = set().union(*contexts_by_field.values())
-        if not context_phrases:
-            return ()
-        context_phrase = max(context_phrases, key=lambda phrase: (len(phrase), phrase))
-        results: list[MatchEvidence] = []
-        for normalized_name in sorted(matched_names):
-            matched_fields = tuple(
-                field
-                for field in _FIELD_ORDER
-                if normalized_name in names_by_field[field]
+        return tuple(
+            evidence
+            for normalized_name in sorted(matched_names)
+            for evidence in _matches_for_name(
+                document,
+                normalized_name=normalized_name,
+                profiles=self._profiles_by_name[normalized_name],
+                names_by_field=names_by_field,
+                contexts_by_field=contexts_by_field,
+                context_phrase=context_phrase,
             )
-            context_fields = tuple(
-                field for field in _FIELD_ORDER if contexts_by_field[field]
-            )
-            evidence_fields = set(matched_fields) | set(context_fields)
-            for profile in self._profiles_by_name[normalized_name]:
-                results.append(
-                    MatchEvidence(
-                        polygon_id=profile.polygon_id,
-                        polygon_name=profile.name,
-                        fineweb_row_index=document.row_index,
-                        fineweb_document_id=document.document_id,
-                        url=document.url,
-                        matched_fields=matched_fields,
-                        context_fields=context_fields,
-                        matched_name=profile.name,
-                        context_phrase=context_phrase,
-                        text_excerpt=_excerpt(
-                            document.text if "text" in evidence_fields else ""
-                        ),
-                        url_excerpt=_excerpt(
-                            document.url if "url" in evidence_fields else ""
-                        ),
-                    )
-                )
-        return tuple(results)
+        )
+
+
+def _find_context(
+    values: Mapping[str, str], matcher: _MultiPatternMatcher
+) -> tuple[dict[str, frozenset[str]], str | None]:
+    candidates = _context_candidates(values)
+    if not candidates:
+        return {}, None
+    contexts_by_field = {
+        field: matcher.find(values[field], decode_url=field == "url")
+        for field in candidates
+    }
+    phrases = set().union(*contexts_by_field.values())
+    if not phrases:
+        return contexts_by_field, None
+    return contexts_by_field, max(phrases, key=lambda phrase: (len(phrase), phrase))
+
+
+def _context_candidates(values: Mapping[str, str]) -> tuple[str, ...]:
+    return tuple(
+        field
+        for field in _FIELD_ORDER
+        if has_monaco_marker(values[field], decode_url=field == "url")
+    )
+
+
+def _find_names(
+    values: Mapping[str, str], matcher: _MultiPatternMatcher
+) -> dict[str, frozenset[str]]:
+    return {
+        field: matcher.find(values[field], decode_url=field == "url")
+        for field in _FIELD_ORDER
+    }
+
+
+def _matches_for_name(
+    document: FineWebDocument,
+    *,
+    normalized_name: str,
+    profiles: Sequence[PolygonProfile],
+    names_by_field: Mapping[str, frozenset[str]],
+    contexts_by_field: Mapping[str, frozenset[str]],
+    context_phrase: str,
+) -> tuple[MatchEvidence, ...]:
+    matched_fields = _fields_containing(normalized_name, names_by_field)
+    context_fields = _fields_with_context(contexts_by_field)
+    evidence_fields = set(matched_fields) | set(context_fields)
+    return tuple(
+        _make_evidence(
+            document,
+            profile=profile,
+            matched_fields=matched_fields,
+            context_fields=context_fields,
+            context_phrase=context_phrase,
+            evidence_fields=evidence_fields,
+        )
+        for profile in profiles
+    )
+
+
+def _fields_containing(
+    value: str, values_by_field: Mapping[str, frozenset[str]]
+) -> tuple[str, ...]:
+    return tuple(field for field in _FIELD_ORDER if value in values_by_field[field])
+
+
+def _fields_with_context(
+    values_by_field: Mapping[str, frozenset[str]],
+) -> tuple[str, ...]:
+    return tuple(field for field in _FIELD_ORDER if values_by_field.get(field))
+
+
+def _make_evidence(
+    document: FineWebDocument,
+    *,
+    profile: PolygonProfile,
+    matched_fields: tuple[str, ...],
+    context_fields: tuple[str, ...],
+    context_phrase: str,
+    evidence_fields: set[str],
+) -> MatchEvidence:
+    return MatchEvidence(
+        polygon_id=profile.polygon_id,
+        polygon_name=profile.name,
+        fineweb_row_index=document.row_index,
+        fineweb_document_id=document.document_id,
+        url=document.url,
+        matched_fields=matched_fields,
+        context_fields=context_fields,
+        matched_name=profile.name,
+        context_phrase=context_phrase,
+        text_excerpt=_excerpt(document.text if "text" in evidence_fields else ""),
+        url_excerpt=_excerpt(document.url if "url" in evidence_fields else ""),
+    )
 
 
 def _excerpt(value: str) -> str:

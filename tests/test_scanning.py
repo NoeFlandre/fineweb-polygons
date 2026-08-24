@@ -7,7 +7,7 @@ import pytest
 
 from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import PolygonProfile
-from fineweb_polygons.scanning import scan_row_group
+from fineweb_polygons.scanning import scan_row_group, scan_row_groups
 
 
 def write_fixture_shard(path: Path) -> Path:
@@ -16,6 +16,23 @@ def write_fixture_shard(path: Path) -> Path:
             "id": ["doc-0", "doc-1"],
             "text": ["No relevant place.", "Fontvieille is in Monaco."],
             "url": ["https://example.test/other", "https://example.test/fontvieille"],
+        }
+    )
+    pq.write_table(table, path, row_group_size=2)
+    return path
+
+
+def write_multi_group_shard(path: Path) -> Path:
+    table = pa.table(
+        {
+            "id": ["doc-0", "doc-1", "doc-2", "doc-3"],
+            "text": [
+                "Fontvieille is in Monaco.",
+                "No relevant place.",
+                "No relevant place.",
+                "Fontvieille is in Monaco.",
+            ],
+            "url": ["", "", "", "https://example.test/fontvieille"],
         }
     )
     pq.write_table(table, path, row_group_size=2)
@@ -52,3 +69,23 @@ def test_scan_row_group_requires_text_and_url(tmp_path: Path) -> None:
             matcher=EvidenceMatcher([]),
             output_path=tmp_path / "partition.jsonl",
         )
+
+
+def test_scan_row_groups_preserves_global_row_indices(tmp_path: Path) -> None:
+    shard = write_multi_group_shard(tmp_path / "multi-group.parquet")
+    output = tmp_path / "partition.jsonl"
+    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
+
+    stats = scan_row_groups(
+        shard,
+        row_group_indices=(0, 1),
+        matcher=matcher,
+        output_path=output,
+    )
+
+    assert stats.rows_scanned == 4
+    assert stats.matches_written == 2
+    records = [
+        json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [record["fineweb_row_index"] for record in records] == [0, 3]

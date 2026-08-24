@@ -28,8 +28,8 @@ V1 scans one FineWeb Parquet shard at a time. It matches a polygon name exactly 
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1 processing is resumable by Parquet row group, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
-- The future implementation will use small, deep modules with stable interfaces and YAGNI scope.
+- V1 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
+- The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
 V1 intentionally skips unnamed polygons, aliases, OSM tags, fuzzy matching, embeddings, and classifiers. It produces evidence JSONL on the Seagate and does not upload the raw shard or results to Hugging Face.
 
@@ -51,10 +51,10 @@ hf download HuggingFaceFW/fineweb \
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
-  --run-id v1-10bt-000
+  --run-id v1-10bt-000-v2
 ```
 
-The run stores checkpoints and a manifest under `runs/v1-10bt-000`, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root.
+The run stores chunk checkpoints and a manifest under `runs/v1-10bt-000-v2`, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root. One chunk opens the Parquet shard once and covers at most 32 row groups.
 
 ## License and upstream data
 

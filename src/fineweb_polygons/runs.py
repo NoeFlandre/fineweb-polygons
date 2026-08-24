@@ -24,11 +24,12 @@ from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import PolygonProfile
 from fineweb_polygons.normalization import NORMALIZATION_VERSION
 from fineweb_polygons.polygons import read_named_polygon_profiles
-from fineweb_polygons.scanning import scan_row_group
+from fineweb_polygons.scanning import ScanStats, scan_row_groups
 
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _MATCHER_VERSION = "v1-exact-name-context"
+_DEFAULT_ROW_GROUPS_PER_PARTITION = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,7 @@ class ScanRunConfig:
     shard_path: Path
     run_id: str
     batch_size: int = 8192
+    row_groups_per_partition: int = _DEFAULT_ROW_GROUPS_PER_PARTITION
 
     def __post_init__(self) -> None:
         if not _RUN_ID_RE.fullmatch(self.run_id):
@@ -49,6 +51,8 @@ class ScanRunConfig:
             )
         if self.batch_size < 1:
             raise ValueError("batch_size must be positive")
+        if self.row_groups_per_partition < 1:
+            raise ValueError("row_groups_per_partition must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,10 +68,36 @@ class RunSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class _RunCounters:
+    partitions_completed: int
+    partitions_skipped: int
+    rows_scanned: int
+    matches_written: int
+
+
+@dataclass(frozen=True, slots=True)
 class _RowGroup:
     index: int
     row_start: int
     row_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class _Partition:
+    index: int
+    row_groups: tuple[_RowGroup, ...]
+
+    @property
+    def row_start(self) -> int:
+        return self.row_groups[0].row_start
+
+    @property
+    def row_count(self) -> int:
+        return sum(row_group.row_count for row_group in self.row_groups)
+
+    @property
+    def row_group_indices(self) -> tuple[int, ...]:
+        return tuple(row_group.index for row_group in self.row_groups)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,43 +125,31 @@ def execute_run(
     *,
     profiles: Sequence[PolygonProfile] | None = None,
 ) -> RunSummary:
-    """Execute or resume a row-group-partitioned FineWeb scan."""
-    validate_external_data_root(config.paths)
-    config.paths.ensure_data_layout()
-    pbf_path = validate_data_path(config.paths, config.pbf_path)
-    shard_path = validate_data_path(config.paths, config.shard_path)
-    if not pbf_path.is_file():
-        raise FileNotFoundError(pbf_path)
-    if not shard_path.is_file():
-        raise FileNotFoundError(shard_path)
-
+    """Execute or resume a chunked FineWeb scan."""
+    pbf_path, shard_path = _validated_inputs(config)
     layout = _RunLayout.from_config(config)
     layout.run_dir.mkdir(parents=True, exist_ok=True)
     layout.partitions_dir.mkdir(parents=True, exist_ok=True)
     row_groups = _inspect_row_groups(shard_path)
+    partitions = _make_partitions(
+        row_groups, groups_per_partition=config.row_groups_per_partition
+    )
     source_fingerprints = {
         "pbf": {"path": str(pbf_path), "sha256": _sha256_file(pbf_path)},
         "shard": {"path": str(shard_path), "sha256": _sha256_file(shard_path)},
     }
-    if profiles is None:
-        profile_result = read_named_polygon_profiles(pbf_path)
-        selected_profiles = profile_result.profiles
-        named_count = profile_result.named_count
-        unnamed_count = profile_result.unnamed_count
-    else:
-        selected_profiles = tuple(profiles)
-        named_count = len(selected_profiles)
-        unnamed_count = 0
+    selected_profiles, named_count, unnamed_count = _select_profiles(pbf_path, profiles)
 
     configuration = {
         "batch_size": config.batch_size,
+        "row_groups_per_partition": config.row_groups_per_partition,
         "matcher_version": _MATCHER_VERSION,
         "normalization_version": NORMALIZATION_VERSION,
     }
     expected_manifest = _new_manifest(
-        config=config,
+        run_id=config.run_id,
         layout=layout,
-        row_groups=row_groups,
+        partitions=partitions,
         source_fingerprints=source_fingerprints,
         profiles=selected_profiles,
         configuration=configuration,
@@ -141,86 +159,163 @@ def execute_run(
     manifest = _load_or_create_manifest(layout.manifest_path, expected_manifest)
     _log(layout.log_path, "run_started", run_id=config.run_id)
     matcher = EvidenceMatcher(selected_profiles)
-    partitions_completed = 0
-    partitions_skipped = 0
-    rows_scanned = 0
-    matches_written = 0
     started = perf_counter()
+    counters = _process_partitions(
+        config=config,
+        layout=layout,
+        manifest=manifest,
+        partitions=partitions,
+        shard_path=shard_path,
+        matcher=matcher,
+    )
+    _merge_partitions(layout, partitions)
+    _complete_run(layout, manifest, counters, elapsed=perf_counter() - started)
+    return RunSummary(
+        result_path=layout.result_path,
+        manifest_path=layout.manifest_path,
+        partitions_completed=counters.partitions_completed,
+        partitions_skipped=counters.partitions_skipped,
+        rows_scanned=counters.rows_scanned,
+        matches_written=counters.matches_written,
+    )
 
-    for row_group in row_groups:
-        partition = manifest["partitions"][row_group.index]
-        partition_path = layout.partitions_dir / (
-            f"partition-{row_group.index:05d}.jsonl"
+
+def _validated_inputs(config: ScanRunConfig) -> tuple[Path, Path]:
+    validate_external_data_root(config.paths)
+    config.paths.ensure_data_layout()
+    pbf_path = validate_data_path(config.paths, config.pbf_path)
+    shard_path = validate_data_path(config.paths, config.shard_path)
+    for path in (pbf_path, shard_path):
+        if not path.is_file():
+            raise FileNotFoundError(path)
+    return pbf_path, shard_path
+
+
+def _select_profiles(
+    pbf_path: Path, profiles: Sequence[PolygonProfile] | None
+) -> tuple[tuple[PolygonProfile, ...], int, int]:
+    if profiles is None:
+        result = read_named_polygon_profiles(pbf_path)
+        return result.profiles, result.named_count, result.unnamed_count
+    selected = tuple(profiles)
+    return selected, len(selected), 0
+
+
+def _process_partitions(
+    *,
+    config: ScanRunConfig,
+    layout: _RunLayout,
+    manifest: dict[str, Any],
+    partitions: Sequence[_Partition],
+    shard_path: Path,
+    matcher: EvidenceMatcher,
+) -> _RunCounters:
+    completed = skipped = rows = matches = 0
+    for partition_spec in partitions:
+        was_skipped, stats = _process_partition(
+            config=config,
+            layout=layout,
+            manifest=manifest,
+            partition_spec=partition_spec,
+            shard_path=shard_path,
+            matcher=matcher,
         )
-        partition["path"] = str(partition_path)
-        if partition["status"] == "complete" and partition_path.is_file():
-            partitions_skipped += 1
-            stats = partition["stats"]
-            rows_scanned += int(stats["rows_scanned"])
-            matches_written += int(stats["matches_written"])
-            _log(layout.log_path, "partition_skipped", partition=row_group.index)
-            continue
+        if was_skipped:
+            skipped += 1
+        else:
+            completed += 1
+        rows += stats.rows_scanned
+        matches += stats.matches_written
+    return _RunCounters(completed, skipped, rows, matches)
 
-        partition["status"] = "running"
+
+def _process_partition(
+    *,
+    config: ScanRunConfig,
+    layout: _RunLayout,
+    manifest: dict[str, Any],
+    partition_spec: _Partition,
+    shard_path: Path,
+    matcher: EvidenceMatcher,
+) -> tuple[bool, ScanStats]:
+    partition = manifest["partitions"][partition_spec.index]
+    partition_path = layout.partitions_dir / (
+        f"partition-{partition_spec.index:05d}.jsonl"
+    )
+    partition["path"] = str(partition_path)
+    if _partition_is_complete(partition, partition_path):
+        stats = _stats_from_record(partition)
+        _log(layout.log_path, "partition_skipped", partition=partition_spec.index)
+        return True, stats
+    partition["status"] = "running"
+    _atomic_json_write(layout.manifest_path, manifest)
+    try:
+        stats = scan_row_groups(
+            shard_path,
+            row_group_indices=partition_spec.row_group_indices,
+            matcher=matcher,
+            output_path=partition_path,
+            batch_size=config.batch_size,
+        )
+    except Exception as error:
+        partition["status"] = "failed"
+        partition["error"] = str(error)
         _atomic_json_write(layout.manifest_path, manifest)
-        try:
-            stats = scan_row_group(
-                shard_path,
-                row_group_index=row_group.index,
-                matcher=matcher,
-                output_path=partition_path,
-                batch_size=config.batch_size,
-            )
-        except Exception as error:
-            partition["status"] = "failed"
-            partition["error"] = str(error)
-            _atomic_json_write(layout.manifest_path, manifest)
-            _log(
-                layout.log_path,
-                "partition_failed",
-                partition=row_group.index,
-                error=str(error),
-            )
-            raise
-        partition["status"] = "complete"
-        partition["stats"] = {
-            "rows_scanned": stats.rows_scanned,
-            "matches_written": stats.matches_written,
-        }
-        _atomic_json_write(layout.manifest_path, manifest)
-        partitions_completed += 1
-        rows_scanned += stats.rows_scanned
-        matches_written += stats.matches_written
         _log(
             layout.log_path,
-            "partition_complete",
-            partition=row_group.index,
-            rows_scanned=stats.rows_scanned,
-            matches=stats.matches_written,
+            "partition_failed",
+            partition=partition_spec.index,
+            error=str(error),
         )
+        raise
+    partition["status"] = "complete"
+    partition["stats"] = {
+        "rows_scanned": stats.rows_scanned,
+        "matches_written": stats.matches_written,
+    }
+    _atomic_json_write(layout.manifest_path, manifest)
+    _log(
+        layout.log_path,
+        "partition_complete",
+        partition=partition_spec.index,
+        rows_scanned=stats.rows_scanned,
+        matches=stats.matches_written,
+    )
+    return False, stats
 
-    _merge_partitions(layout, row_groups)
+
+def _partition_is_complete(partition: Mapping[str, Any], path: Path) -> bool:
+    return partition["status"] == "complete" and path.is_file()
+
+
+def _stats_from_record(partition: Mapping[str, Any]) -> ScanStats:
+    stats = partition["stats"]
+    return ScanStats(
+        rows_scanned=int(stats["rows_scanned"]),
+        matches_written=int(stats["matches_written"]),
+    )
+
+
+def _complete_run(
+    layout: _RunLayout,
+    manifest: dict[str, Any],
+    counters: _RunCounters,
+    *,
+    elapsed: float,
+) -> None:
     manifest["status"] = "complete"
-    manifest["rows_scanned"] = rows_scanned
-    manifest["matches_written"] = matches_written
-    manifest["elapsed_seconds"] = perf_counter() - started
+    manifest["rows_scanned"] = counters.rows_scanned
+    manifest["matches_written"] = counters.matches_written
+    manifest["elapsed_seconds"] = elapsed
     manifest["result_sha256"] = _sha256_file(layout.result_path)
     manifest["completed_at"] = _timestamp()
     _atomic_json_write(layout.manifest_path, manifest)
     _log(
         layout.log_path,
         "run_complete",
-        rows_scanned=rows_scanned,
-        matches=matches_written,
-        elapsed_seconds=manifest["elapsed_seconds"],
-    )
-    return RunSummary(
-        result_path=layout.result_path,
-        manifest_path=layout.manifest_path,
-        partitions_completed=partitions_completed,
-        partitions_skipped=partitions_skipped,
-        rows_scanned=rows_scanned,
-        matches_written=matches_written,
+        rows_scanned=counters.rows_scanned,
+        matches=counters.matches_written,
+        elapsed_seconds=elapsed,
     )
 
 
@@ -241,11 +336,20 @@ def _inspect_row_groups(shard_path: Path) -> tuple[_RowGroup, ...]:
     return tuple(row_groups)
 
 
+def _make_partitions(
+    row_groups: Sequence[_RowGroup], *, groups_per_partition: int
+) -> tuple[_Partition, ...]:
+    return tuple(
+        _Partition(index, tuple(row_groups[start : start + groups_per_partition]))
+        for index, start in enumerate(range(0, len(row_groups), groups_per_partition))
+    )
+
+
 def _new_manifest(
     *,
-    config: ScanRunConfig,
+    run_id: str,
     layout: _RunLayout,
-    row_groups: Sequence[_RowGroup],
+    partitions: Sequence[_Partition],
     source_fingerprints: Mapping[str, object],
     profiles: Sequence[PolygonProfile],
     configuration: Mapping[str, object],
@@ -254,20 +358,21 @@ def _new_manifest(
 ) -> dict[str, Any]:
     partition_records = [
         {
-            "index": row_group.index,
-            "row_start": row_group.row_start,
-            "row_count": row_group.row_count,
+            "index": partition.index,
+            "row_group_indices": list(partition.row_group_indices),
+            "row_start": partition.row_start,
+            "row_count": partition.row_count,
             "status": "pending",
             "stats": None,
             "path": str(
-                layout.partitions_dir / f"partition-{row_group.index:05d}.jsonl"
+                layout.partitions_dir / f"partition-{partition.index:05d}.jsonl"
             ),
         }
-        for row_group in row_groups
+        for partition in partitions
     ]
     return {
         "schema_version": _SCHEMA_VERSION,
-        "run_id": config.run_id,
+        "run_id": run_id,
         "status": "running",
         "sources": source_fingerprints,
         "configuration": configuration,
@@ -299,9 +404,7 @@ def _load_or_create_manifest(
         created = dict(expected)
         _atomic_json_write(manifest_path, created)
         return created
-    manifest: dict[str, Any] = json.loads(
-        manifest_path.read_text(encoding="utf-8")
-    )
+    manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
     for key in (
         "schema_version",
         "run_id",
@@ -322,20 +425,23 @@ def _partition_structure(partitions: object) -> list[dict[str, object]]:
     if not isinstance(partitions, list):
         raise ValueError("Run manifest partitions must be a list")
     return [
-        {key: partition[key] for key in ("index", "row_start", "row_count", "path")}
+        {
+            key: partition[key]
+            for key in ("index", "row_group_indices", "row_start", "row_count", "path")
+        }
         for partition in partitions
         if isinstance(partition, dict)
     ]
 
 
-def _merge_partitions(layout: _RunLayout, row_groups: Sequence[_RowGroup]) -> None:
+def _merge_partitions(layout: _RunLayout, partitions: Sequence[_Partition]) -> None:
     temporary_path = layout.result_path.with_name(f".{layout.result_path.name}.tmp")
     layout.result_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with temporary_path.open("w", encoding="utf-8") as output:
-            for row_group in row_groups:
+            for partition in partitions:
                 partition_path = layout.partitions_dir / (
-                    f"partition-{row_group.index:05d}.jsonl"
+                    f"partition-{partition.index:05d}.jsonl"
                 )
                 if partition_path.exists():
                     with partition_path.open("r", encoding="utf-8") as partition:

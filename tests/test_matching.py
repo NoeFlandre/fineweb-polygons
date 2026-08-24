@@ -31,6 +31,32 @@ def test_name_in_text_and_context_in_url_is_high_confidence() -> None:
     assert matcher.match(document)[0].polygon_id == "way/1"
 
 
+def test_url_encoded_context_is_high_confidence() -> None:
+    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
+    document = FineWebDocument(
+        row_index=7,
+        document_id=None,
+        text="Fontvieille has a new report.",
+        url="https://example.test/Principality%20of%20Monaco/report",
+    )
+
+    assert matcher.match(document)[0].context_fields == ("url",)
+
+
+def test_context_marker_without_an_accepted_phrase_is_not_high_confidence() -> None:
+    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
+    document = FineWebDocument(8, None, "Fontvieille near Monacology.", "")
+
+    assert matcher.match(document) == ()
+
+
+def test_context_without_a_polygon_name_is_not_high_confidence() -> None:
+    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
+    document = FineWebDocument(9, None, "A report from Monaco.", "")
+
+    assert matcher.match(document) == ()
+
+
 def test_name_without_context_is_not_high_confidence() -> None:
     matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
     document = FineWebDocument(6, "doc-6", "Fontvieille has a report.", "")

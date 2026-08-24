@@ -36,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     scan.add_argument("--pbf", type=Path)
     scan.add_argument("--shard", type=Path, required=True)
-    scan.add_argument("--run-id", default="v1-10bt-000")
+    scan.add_argument("--run-id", default="v1-10bt-000-v2")
     scan.add_argument("--batch-size", type=int, default=8192)
     return parser
 

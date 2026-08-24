@@ -10,10 +10,21 @@ NORMALIZATION_VERSION = "v1-nfkc-casefold-separators"
 _SEPARATOR_RE = re.compile(r"[\W_]+", re.UNICODE)
 
 
-def normalize_for_search(value: object) -> str:
-    """Normalize text for case-insensitive exact token matching."""
+def normalize_for_search(value: object, *, decode_url: bool = True) -> str:
+    """Normalize a field for case-insensitive exact token matching."""
     if value is None:
         return ""
     text = unicodedata.normalize("NFKC", str(value)).casefold()
-    text = unquote(text)
-    return " ".join(_SEPARATOR_RE.split(text)).strip()
+    if decode_url:
+        text = unquote(text)
+    return _SEPARATOR_RE.sub(" ", text).strip()
+
+
+def has_monaco_marker(value: object, *, decode_url: bool = True) -> bool:
+    """Cheap, sound prefilter for either accepted Monaco context phrase."""
+    if value is None:
+        return False
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    if decode_url:
+        text = unquote(text)
+    return "monaco" in text

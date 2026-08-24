@@ -29,10 +29,10 @@ Run the resumable scan with:
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
-  --run-id v1-10bt-000
+  --run-id v1-10bt-000-v2
 ```
 
-V1 keeps only named polygon profiles. A match requires the normalized name in `text` or `url`, plus `Monaco` or `Principality of Monaco` in `text` or `url`; matching both fields is not required.
+V1 keeps only named polygon profiles. A match requires the normalized name in `text` or `url`, plus `Monaco` or `Principality of Monaco` in `text` or `url`; matching both fields is not required. The default checkpoint covers 32 row groups, so the scanner opens the shard once per checkpoint and can resume after an interruption.
 
 ## Red-green-refactor
 
