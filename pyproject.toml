@@ -10,8 +10,11 @@ readme = "README.md"
 requires-python = ">=3.12,<3.15"
 license = { file = "LICENSE" }
 authors = [{ name = "Noe Flandre" }]
-dependencies = []
-
+dependencies = [
+    "pyarrow>=18.0",
+    "osmium>=4.0",
+    "pyahocorasick>=2.1",
+]
 [project.scripts]
 fineweb-polygons = "fineweb_polygons.cli:main"
 
@@ -63,6 +66,8 @@ select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
 [tool.ruff.format]
 quote-style = "double"
 
+
 [tool.mutmut]
 source_paths = ["src/fineweb_polygons"]
+also_copy = ["scripts/"]
 pytest_add_cli_args = ["-q"]

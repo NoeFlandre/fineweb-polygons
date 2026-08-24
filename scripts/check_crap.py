@@ -18,17 +18,14 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _coverage_by_file(path: Path) -> dict[str, set[int]]:
+def _coverage_by_file(path: Path) -> dict[str, dict[str, Any]]:
     payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return {
-        filename: set(details["executed_lines"])
-        for filename, details in payload["files"].items()
-    }
+    return payload["files"]
 
 
 def _coverage_entry(
-    filename: str, source_root: Path, coverage: dict[str, set[int]]
-) -> set[int]:
+    filename: str, source_root: Path, coverage: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     candidates = [filename, str(Path(filename).resolve())]
     source_path = Path(filename)
     if not source_path.is_absolute():
@@ -37,17 +34,17 @@ def _coverage_entry(
     for candidate in candidates:
         if candidate in coverage:
             return coverage[candidate]
-    return set()
+    return {}
 
 
 def _blocks(source: str) -> list[Any]:
     unique: dict[tuple[int, int, str], Any] = {}
     for block in cc_visit(source):
-        candidates = [block, *getattr(block, "methods", [])]
-        for candidate in candidates:
-            key = (candidate.lineno, candidate.endline, candidate.name)
+        methods = getattr(block, "methods", None)
+        for candidate in methods if methods is not None else [block]:
+            key = (candidate.lineno, candidate.endline, candidate.fullname)
             unique[key] = candidate
-    return list(unique.values())
+    return sorted(unique.values(), key=lambda block: block.lineno)
 
 
 def _crap_score(complexity: int, coverage_percent: float) -> float:
@@ -56,17 +53,18 @@ def _crap_score(complexity: int, coverage_percent: float) -> float:
 
 
 def _report(
-    source_root: Path, coverage: dict[str, set[int]]
+    source_root: Path, coverage: dict[str, dict[str, Any]]
 ) -> list[tuple[str, float]]:
     reports: list[tuple[str, float]] = []
     for path in sorted(source_root.rglob("*.py")):
-        executed = _coverage_entry(str(path), source_root, coverage)
+        entry = _coverage_entry(str(path), source_root, coverage)
+        functions = entry.get("functions", {})
         source = path.read_text(encoding="utf-8")
         for block in _blocks(source):
-            lines = set(range(block.lineno, block.endline + 1))
-            covered = 100.0 * len(lines & executed) / len(lines)
+            function = functions.get(block.fullname, {})
+            covered = float(function.get("summary", {}).get("percent_covered", 0.0))
             score = _crap_score(block.complexity, covered)
-            reports.append((f"{path}:{block.lineno} {block.name}", score))
+            reports.append((f"{path}:{block.lineno} {block.fullname}", score))
     return reports
 
 

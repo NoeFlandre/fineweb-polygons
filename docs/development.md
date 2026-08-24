@@ -3,11 +3,36 @@
 ## Setup
 
 ```bash
-uv sync
+export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache"
+export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons"
+uv sync --locked
 uv run pre-commit install
 ```
 
 Keep raw and generated data on `/Volumes/Seagate M3/projects/fineweb-polygons`. Do not copy PBF, Parquet, JSONL, database, or run-output files into this checkout.
+
+## V1 shard scan
+
+The first V1 input is FineWeb's `sample/10BT/000_00000.parquet` shard. Keep the Hugging Face cache on the Seagate and download only that file:
+
+```bash
+export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/.hf"
+hf download HuggingFaceFW/fineweb \
+  --repo-type dataset \
+  --include "sample/10BT/000_00000.parquet" \
+  --local-dir "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb"
+```
+
+Run the resumable scan with:
+
+```bash
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v1-10bt-000-v2
+```
+
+V1 keeps only named polygon profiles. A match requires the normalized name in `text` or `url`, plus `Monaco` or `Principality of Monaco` in `text` or `url`; matching both fields is not required. The default checkpoint covers 32 row groups, so the scanner opens the shard once per checkpoint and can resume after an interruption.
 
 ## Red-green-refactor
 
@@ -19,7 +44,7 @@ New behavior follows TDD:
 4. Run the focused test and the full suite.
 5. Refactor only while the suite remains green.
 
-The foundation package currently exposes only storage-path behavior. No OSM or FineWeb processing should be added until its design is agreed.
+The V1 pipeline is intentionally narrow. Do not add aliases, OSM tags, fuzzy matching, embeddings, or classifiers until the exact-match baseline has been evaluated.
 
 ## Quality commands
 
