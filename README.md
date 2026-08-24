@@ -109,6 +109,15 @@ file. The shard contains 539,338,878 whitespace-separated words (and a FineWeb
 `token_count` sum of 726,306,534). V3 retained 77 final evidence records across
 7 polygon names.
 
+The V4 first-shard run scanned the same 1,048,581 documents and retained 1,282
+deduplicated evidence records across 42 polygon names. It contains 1,205
+records selected from text alone and 77 where the URL also contains the name;
+all 1,282 records retain the complete FineWeb text. Because V4 intentionally
+removes the URL condition, the result is a higher-recall baseline and is still
+broad for generic names: 1,067 records use the polygon name `Monaco`. This is
+documented as an experiment, not as a claim that every text-only match is
+already semantically correct.
+
 The code and manifests still preserve the retrieval definition for each version;
 new output should use a new artifact path rather than overwriting a published
 file.

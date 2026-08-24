@@ -60,7 +60,8 @@ are comparable, but their historical evidence schemas are not identical:
   document in `text`, plus the excerpt fields and deduplicated evidence.
 - `v4/train` is the text-only release. It has the complete FineWeb document in
   `text`, plus the excerpt fields and deduplicated evidence; its URL is not a
-  selection condition.
+  selection condition. On the first shard it contains 1,282 records across 42
+  polygon names, including 1,205 records selected from text alone.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.
