@@ -20,7 +20,7 @@ export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/.hf"
 hf download HuggingFaceFW/fineweb \
   --repo-type dataset \
   --include "sample/10BT/000_00000.parquet" \
-  --local-dir "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/10BT"
+  --local-dir "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb"
 ```
 
 Run the resumable scan with:
@@ -28,7 +28,7 @@ Run the resumable scan with:
 ```bash
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/10BT/000_00000.parquet" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v1-10bt-000
 ```
 
