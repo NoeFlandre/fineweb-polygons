@@ -18,6 +18,10 @@ site/
 .env.*
 !.env.example
 
+# Local planning and isolated worktrees stay outside public history.
+docs/superpowers/
+.worktrees/
+
 # Raw and generated data belong on the Seagate project volume.
 data/
 *.osm.pbf
