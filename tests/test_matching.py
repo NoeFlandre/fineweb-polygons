@@ -3,9 +3,7 @@ from fineweb_polygons.models import FineWebDocument, PolygonProfile
 
 
 def test_name_in_url_and_context_in_text_is_high_confidence() -> None:
-    matcher = EvidenceMatcher(
-        [PolygonProfile.create("way/1", "Casino de Monte Carlo")]
-    )
+    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Casino de Monte Carlo")])
     document = FineWebDocument(
         row_index=4,
         document_id="doc-4",

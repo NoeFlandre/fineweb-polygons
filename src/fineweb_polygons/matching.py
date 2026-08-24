@@ -28,9 +28,7 @@ class _MultiPatternMatcher:
         if not normalized:
             return frozenset()
         padded = f" {normalized} "
-        return frozenset(
-            pattern for _, pattern in self._automaton.iter(padded)
-        )
+        return frozenset(pattern for _, pattern in self._automaton.iter(padded))
 
 
 class EvidenceMatcher:
@@ -54,8 +52,7 @@ class EvidenceMatcher:
             field: self._name_matcher.find(values[field]) for field in _FIELD_ORDER
         }
         contexts_by_field = {
-            field: self._context_matcher.find(values[field])
-            for field in _FIELD_ORDER
+            field: self._context_matcher.find(values[field]) for field in _FIELD_ORDER
         }
         matched_names = set().union(*names_by_field.values())
         if not matched_names:
@@ -72,9 +69,7 @@ class EvidenceMatcher:
                 if normalized_name in names_by_field[field]
             )
             context_fields = tuple(
-                field
-                for field in _FIELD_ORDER
-                if contexts_by_field[field]
+                field for field in _FIELD_ORDER if contexts_by_field[field]
             )
             evidence_fields = set(matched_fields) | set(context_fields)
             for profile in self._profiles_by_name[normalized_name]:
@@ -103,4 +98,4 @@ class EvidenceMatcher:
 def _excerpt(value: str) -> str:
     if len(value) <= _EXCERPT_LIMIT:
         return value
-    return f"{value[:_EXCERPT_LIMIT - 1]}…"
+    return f"{value[: _EXCERPT_LIMIT - 1]}…"

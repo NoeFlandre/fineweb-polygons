@@ -6,11 +6,12 @@ import hashlib
 import json
 import re
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 import pyarrow.parquet as pq
 
@@ -245,12 +246,12 @@ def _new_manifest(
     config: ScanRunConfig,
     layout: _RunLayout,
     row_groups: Sequence[_RowGroup],
-    source_fingerprints: dict[str, object],
+    source_fingerprints: Mapping[str, object],
     profiles: Sequence[PolygonProfile],
-    configuration: dict[str, object],
+    configuration: Mapping[str, object],
     named_count: int,
     unnamed_count: int,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     partition_records = [
         {
             "index": row_group.index,
@@ -292,12 +293,15 @@ def _new_manifest(
 
 def _load_or_create_manifest(
     manifest_path: Path,
-    expected: dict[str, object],
-) -> dict[str, object]:
+    expected: Mapping[str, object],
+) -> dict[str, Any]:
     if not manifest_path.exists():
-        _atomic_json_write(manifest_path, expected)
-        return expected
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        created = dict(expected)
+        _atomic_json_write(manifest_path, created)
+        return created
+    manifest: dict[str, Any] = json.loads(
+        manifest_path.read_text(encoding="utf-8")
+    )
     for key in (
         "schema_version",
         "run_id",
@@ -318,10 +322,7 @@ def _partition_structure(partitions: object) -> list[dict[str, object]]:
     if not isinstance(partitions, list):
         raise ValueError("Run manifest partitions must be a list")
     return [
-        {
-            key: partition[key]
-            for key in ("index", "row_start", "row_count", "path")
-        }
+        {key: partition[key] for key in ("index", "row_start", "row_count", "path")}
         for partition in partitions
         if isinstance(partition, dict)
     ]
@@ -345,7 +346,7 @@ def _merge_partitions(layout: _RunLayout, row_groups: Sequence[_RowGroup]) -> No
         raise
 
 
-def _atomic_json_write(path: Path, value: dict[str, object]) -> None:
+def _atomic_json_write(path: Path, value: Mapping[str, Any]) -> None:
     temporary_path = path.with_name(f".{path.name}.tmp")
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
