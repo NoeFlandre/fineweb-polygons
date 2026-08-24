@@ -15,6 +15,7 @@ dependencies = [
     "osmium>=4.0",
     "pyahocorasick>=2.1",
 ]
+
 [project.scripts]
 fineweb-polygons = "fineweb_polygons.cli:main"
 
@@ -65,7 +66,6 @@ select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
 
 [tool.ruff.format]
 quote-style = "double"
-
 
 [tool.mutmut]
 source_paths = ["src/fineweb_polygons"]

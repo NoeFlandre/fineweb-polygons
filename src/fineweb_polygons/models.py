@@ -48,6 +48,7 @@ class MatchEvidence:
     context_fields: tuple[str, ...]
     matched_name: str
     context_phrase: str
+    text: str
     text_excerpt: str
     url_excerpt: str
 
@@ -63,6 +64,7 @@ class MatchEvidence:
             "context_fields": list(self.context_fields),
             "matched_name": self.matched_name,
             "context_phrase": self.context_phrase,
+            "text": self.text,
             "text_excerpt": self.text_excerpt,
             "url_excerpt": self.url_excerpt,
         }

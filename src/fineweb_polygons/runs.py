@@ -23,12 +23,15 @@ from fineweb_polygons.foundation import (
 from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import PolygonProfile
 from fineweb_polygons.normalization import NORMALIZATION_VERSION
-from fineweb_polygons.polygons import read_named_polygon_profiles
+from fineweb_polygons.polygons import (
+    read_named_polygon_profiles,
+    read_v2_polygon_profiles,
+)
 from fineweb_polygons.scanning import ScanStats, scan_row_groups
+from fineweb_polygons.versions import get_retrieval_definition
 
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _SCHEMA_VERSION = 2
-_MATCHER_VERSION = "v1-exact-name-context"
 _DEFAULT_ROW_GROUPS_PER_PARTITION = 32
 
 
@@ -42,6 +45,7 @@ class ScanRunConfig:
     run_id: str
     batch_size: int = 8192
     row_groups_per_partition: int = _DEFAULT_ROW_GROUPS_PER_PARTITION
+    retrieval_version: str = "v1"
 
     def __post_init__(self) -> None:
         if not _RUN_ID_RE.fullmatch(self.run_id):
@@ -53,6 +57,7 @@ class ScanRunConfig:
             raise ValueError("batch_size must be positive")
         if self.row_groups_per_partition < 1:
             raise ValueError("row_groups_per_partition must be positive")
+        get_retrieval_definition(self.retrieval_version)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +133,8 @@ def execute_run(
     """Execute or resume a chunked FineWeb scan."""
     pbf_path, shard_path = _validated_inputs(config)
     layout = _RunLayout.from_config(config)
-    layout.partitions_dir.mkdir(parents=True, exist_ok=True)
+    layout.run_dir.mkdir(exist_ok=True)
+    layout.partitions_dir.mkdir(exist_ok=True)
     row_groups = _inspect_row_groups(shard_path)
     partitions = _make_partitions(
         row_groups, groups_per_partition=config.row_groups_per_partition
@@ -137,13 +143,26 @@ def execute_run(
         "pbf": {"path": str(pbf_path), "sha256": _sha256_file(pbf_path)},
         "shard": {"path": str(shard_path), "sha256": _sha256_file(shard_path)},
     }
-    selected_profiles, named_count, unnamed_count = _select_profiles(pbf_path, profiles)
+    definition = get_retrieval_definition(config.retrieval_version)
+    (
+        selected_profiles,
+        named_count,
+        unnamed_count,
+        filtered_count,
+    ) = _select_profiles(
+        pbf_path,
+        profiles,
+        retrieval_version=config.retrieval_version,
+    )
 
     configuration = {
         "batch_size": config.batch_size,
         "row_groups_per_partition": config.row_groups_per_partition,
-        "matcher_version": _MATCHER_VERSION,
+        "matcher_version": definition.matcher_version,
         "normalization_version": NORMALIZATION_VERSION,
+        "polygon_profile_version": definition.polygon_profile_version,
+        "retrieval_version": config.retrieval_version,
+        "retrieval_definition": definition.to_record(),
     }
     expected_manifest = _new_manifest(
         run_id=config.run_id,
@@ -154,10 +173,14 @@ def execute_run(
         configuration=configuration,
         named_count=named_count,
         unnamed_count=unnamed_count,
+        filtered_count=filtered_count,
     )
     manifest = _load_or_create_manifest(layout.manifest_path, expected_manifest)
     _log(layout.log_path, "run_started", run_id=config.run_id)
-    matcher = EvidenceMatcher(selected_profiles)
+    matcher = EvidenceMatcher(
+        selected_profiles,
+        require_text_context=definition.requires_text_context,
+    )
     started = perf_counter()
     counters = _process_partitions(
         config=config,
@@ -191,13 +214,26 @@ def _validated_inputs(config: ScanRunConfig) -> tuple[Path, Path]:
 
 
 def _select_profiles(
-    pbf_path: Path, profiles: Sequence[PolygonProfile] | None
-) -> tuple[tuple[PolygonProfile, ...], int, int]:
+    pbf_path: Path,
+    profiles: Sequence[PolygonProfile] | None,
+    *,
+    retrieval_version: str,
+) -> tuple[tuple[PolygonProfile, ...], int, int, int]:
     if profiles is None:
-        result = read_named_polygon_profiles(pbf_path)
-        return result.profiles, result.named_count, result.unnamed_count
+        reader = (
+            read_v2_polygon_profiles
+            if retrieval_version == "v2"
+            else read_named_polygon_profiles
+        )
+        result = reader(pbf_path)
+        return (
+            result.profiles,
+            result.named_count,
+            result.unnamed_count,
+            result.filtered_count,
+        )
     selected = tuple(profiles)
-    return selected, len(selected), 0
+    return selected, len(selected), 0, 0
 
 
 def _process_partitions(
@@ -354,6 +390,7 @@ def _new_manifest(
     configuration: Mapping[str, object],
     named_count: int,
     unnamed_count: int,
+    filtered_count: int,
 ) -> dict[str, Any]:
     partition_records = [
         {
@@ -389,6 +426,7 @@ def _new_manifest(
         "polygon_counts": {
             "named": named_count,
             "unnamed": unnamed_count,
+            "filtered": filtered_count,
         },
         "partitions": partition_records,
         "result_path": str(layout.result_path),
@@ -408,6 +446,7 @@ def _load_or_create_manifest(
         "schema_version",
         "run_id",
         "sources",
+        "configuration",
         "configuration_sha256",
         "polygon_profile_sha256",
     ):

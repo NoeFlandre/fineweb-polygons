@@ -25,6 +25,7 @@ def test_name_in_url_and_context_in_text_is_high_confidence() -> None:
     assert len(matches) == 1
     assert matches[0].matched_fields == ("url",)
     assert matches[0].context_fields == ("text",)
+    assert matches[0].context_phrase == "monaco"
     assert matches[0].url_excerpt == document.url
 
 
@@ -52,6 +53,55 @@ def test_url_encoded_context_is_high_confidence() -> None:
     assert matcher.match(document)[0].context_fields == ("url",)
 
 
+def test_context_helpers_decode_only_urls_and_choose_the_longest_context() -> None:
+    values = {
+        "text": "Principality%20of%20M%6fnaco",
+        "url": "https://example.test/Principality%20of%20%4d%6f%6e%61%63%6f",
+    }
+    context_matcher = _MultiPatternMatcher(("monaco", "principality of monaco"))
+
+    assert _context_candidates(values) == ("url",)
+    contexts, phrase = _find_context(values, context_matcher)
+    assert contexts == {"url": frozenset({"monaco", "principality of monaco"})}
+    assert phrase == "principality of monaco"
+
+
+def test_context_helper_does_not_decode_text_values() -> None:
+    values = {"text": "Principality%20of Monaco", "url": ""}
+    context_matcher = _MultiPatternMatcher(("monaco", "principality of monaco"))
+
+    contexts, phrase = _find_context(values, context_matcher)
+
+    assert contexts == {"text": frozenset({"monaco"})}
+    assert phrase == "monaco"
+
+
+def test_context_helper_prefers_longest_phrase_over_lexical_order() -> None:
+    class FakeContextMatcher:
+        def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
+            del value, decode_url
+            return frozenset({"zzzz", "a much longer phrase"})
+
+    contexts, phrase = _find_context(
+        {"text": "monaco", "url": ""}, cast(_MultiPatternMatcher, FakeContextMatcher())
+    )
+
+    assert contexts == {"text": frozenset({"zzzz", "a much longer phrase"})}
+    assert phrase == "a much longer phrase"
+
+
+def test_name_helper_decodes_urls_but_not_text() -> None:
+    values = {
+        "text": "fontv%69eille",
+        "url": "https://example.test/fontv%69eille",
+    }
+
+    assert _find_names(values, _MultiPatternMatcher(("fontvieille",))) == {
+        "text": frozenset(),
+        "url": frozenset({"fontvieille"}),
+    }
+
+
 def test_context_marker_without_an_accepted_phrase_is_not_high_confidence() -> None:
     matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
     document = FineWebDocument(8, None, "Fontvieille near Monacology.", "")
@@ -73,119 +123,143 @@ def test_name_without_context_is_not_high_confidence() -> None:
     assert matcher.match(document) == ()
 
 
-def test_low_level_matcher_decodes_url_escapes_only_when_requested() -> None:
-    matcher = _MultiPatternMatcher(("casino de monte carlo",))
-    url = "https://example.test/Casino%20de%20Monte%20Carlo"
+def test_v2_text_match_requires_monaco_context_in_the_same_text() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    document = FineWebDocument(
+        10,
+        "doc-10",
+        "Fontvieille has a report.",
+        "https://monaco.example.test/report",
+    )
 
-    assert matcher.find(url, decode_url=True) == frozenset({"casino de monte carlo"})
-    assert matcher.find(url, decode_url=False) == frozenset()
+    assert matcher.match(document) == ()
 
 
-def test_low_level_matcher_does_not_decode_urls_by_default() -> None:
-    matcher = _MultiPatternMatcher(("casino de monte carlo",))
+def test_v2_text_match_accepts_monaco_context_in_the_same_text() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    document = FineWebDocument(
+        11,
+        "doc-11",
+        "Fontvieille is in Monaco.",
+        "https://example.test/report",
+    )
+
+    evidence = matcher.match(document)[0]
+
+    assert evidence.matched_fields == ("text",)
+    assert evidence.url_excerpt == ""
+
+
+def test_v2_url_match_does_not_require_country_context() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    document = FineWebDocument(
+        12,
+        "doc-12",
+        "A report about an unrelated place.",
+        "https://example.test/fontvieille",
+    )
+
+    assert matcher.match(document)[0].matched_fields == ("url",)
+
+
+def test_multi_pattern_matcher_decodes_encoded_values_by_default() -> None:
+    matcher = _MultiPatternMatcher(["café"])
+
+    assert matcher.find("https://example.test/caf%C3%A9") == frozenset({"café"})
+
+
+def test_multi_pattern_matcher_can_skip_url_decoding() -> None:
+    matcher = _MultiPatternMatcher(["café"])
 
     assert (
-        matcher.find("https://example.test/Casino%20de%20Monte%20Carlo") == frozenset()
+        matcher.find("https://example.test/caf%C3%A9", decode_url=False) == frozenset()
     )
 
 
-def test_context_helper_prefers_the_longest_context_phrase() -> None:
-    class FakeMatcher:
-        def find(self, value: str, *, decode_url: bool = False) -> frozenset[str]:
-            return frozenset({"z", "aaaaaa"})
-
-    contexts, phrase = _find_context(
-        {"text": "Monaco", "url": ""}, cast(_MultiPatternMatcher, FakeMatcher())
-    )
-
-    assert contexts == {"text": frozenset({"z", "aaaaaa"})}
-    assert phrase == "aaaaaa"
-
-
-def test_context_helpers_keep_url_decoding_and_prefer_longest_phrase() -> None:
-    values = {
-        "text": "A report from Monaco.",
-        "url": "https://example.test/Principality%20of%20%4Donaco/report",
-    }
-    matcher = _MultiPatternMatcher(("monaco", "principality of monaco"))
-
-    assert _context_candidates(values) == ("text", "url")
-    contexts, phrase = _find_context(values, matcher)
-
-    assert contexts["text"] == frozenset({"monaco"})
-    assert contexts["url"] == frozenset({"monaco", "principality of monaco"})
-    assert phrase == "principality of monaco"
-
-
-def test_name_helper_decodes_a_name_in_a_url() -> None:
-    values = {
-        "text": "No polygon name here.",
-        "url": "https://example.test/Casino%20de%20Monte%20Carlo",
-    }
-    matcher = _MultiPatternMatcher(("casino de monte carlo",))
-
-    assert _find_names(values, matcher) == {
-        "text": frozenset(),
-        "url": frozenset({"casino de monte carlo"}),
-    }
-
-
-def test_match_orders_same_name_profiles_and_preserves_all_evidence() -> None:
+def test_matcher_orders_profiles_with_the_same_normalized_name() -> None:
     matcher = EvidenceMatcher(
         [
-            PolygonProfile.create("way/2", "Fontvieille"),
-            PolygonProfile.create("way/1", "Fontvieille"),
+            PolygonProfile.create("way/2", "Palais"),
+            PolygonProfile.create("way/1", "Palais"),
         ]
     )
     document = FineWebDocument(
-        row_index=10,
-        document_id="doc-10",
-        text=("Fontvieille and Monaco. " * 20),
-        url=(
-            "https://example.test/Fontvieille/Principality%20of%20%4Donaco/"
-            + ("x/" * 150)
-        ),
+        13,
+        "doc-13",
+        "Palais is in Monaco.",
+        "",
     )
 
-    matches = matcher.match(document)
-
-    assert [match.polygon_id for match in matches] == ["way/1", "way/2"]
-    assert all(match.matched_fields == ("text", "url") for match in matches)
-    assert all(match.context_fields == ("text", "url") for match in matches)
-    assert all(match.context_phrase == "principality of monaco" for match in matches)
-    assert all(match.polygon_name == "Fontvieille" for match in matches)
-    assert all(match.matched_name == "Fontvieille" for match in matches)
-    assert all(match.fineweb_document_id == "doc-10" for match in matches)
-    assert all(match.url == document.url for match in matches)
-    assert all(len(match.text_excerpt) == 240 for match in matches)
-    assert all(match.text_excerpt.endswith("…") for match in matches)
-    assert all(match.url_excerpt.endswith("…") for match in matches)
+    assert [evidence.polygon_id for evidence in matcher.match(document)] == [
+        "way/1",
+        "way/2",
+    ]
 
 
-def test_match_excerpts_are_empty_for_fields_without_evidence() -> None:
-    matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
+def test_v2_url_only_evidence_records_an_empty_context_phrase() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    document = FineWebDocument(
+        14,
+        "doc-14",
+        "An unrelated page.",
+        "https://example.test/fontvieille",
+    )
 
-    text_only = matcher.match(
-        FineWebDocument(11, None, "Fontvieille in Monaco.", "https://example.test")
-    )[0]
-    url_only = matcher.match(
-        FineWebDocument(
-            12,
-            None,
-            "A general report.",
-            "https://example.test/Fontvieille/Monaco",
-        )
-    )[0]
-
-    assert text_only.text_excerpt == "Fontvieille in Monaco."
-    assert text_only.url_excerpt == ""
-    assert url_only.text_excerpt == ""
-    assert url_only.url_excerpt == url_only.url
+    assert matcher.match(document)[0].context_phrase == ""
 
 
-def test_excerpt_keeps_the_exact_boundary_and_truncates_after_it() -> None:
-    at_limit = "x" * 240
-    above_limit = "x" * 241
+def test_v2_evidence_records_the_complete_text() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    full_text = "Fontvieille is in Monaco. " * 40
+    document = FineWebDocument(
+        15,
+        "doc-15",
+        full_text,
+        "https://example.test/fontvieille",
+    )
 
-    assert _excerpt(at_limit) == at_limit
-    assert _excerpt(above_limit) == ("x" * 239) + "…"
+    evidence = matcher.match(document)[0]
+    record = evidence.to_record()
+
+    assert record["polygon_name"] == "Fontvieille"
+    assert record["fineweb_document_id"] == "doc-15"
+    assert record["url"] == "https://example.test/fontvieille"
+    assert record["matched_name"] == "Fontvieille"
+    assert record["text"] == full_text
+    assert record["text_excerpt"] == f"{full_text[:239]}…"
+
+
+def test_v2_url_only_evidence_keeps_text_excerpt_empty() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+    )
+    document = FineWebDocument(
+        16,
+        "doc-16",
+        "An unrelated page.",
+        "https://example.test/fontvieille",
+    )
+
+    assert matcher.match(document)[0].to_record()["text_excerpt"] == ""
+
+
+def test_excerpt_keeps_the_exact_boundary_length() -> None:
+    value = "x" * 240
+
+    assert _excerpt(value) == value

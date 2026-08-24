@@ -23,7 +23,7 @@ class _MultiPatternMatcher:
             self._automaton.add_word(f" {pattern} ", pattern)
         self._automaton.make_automaton()
 
-    def find(self, value: str, *, decode_url: bool = False) -> frozenset[str]:
+    def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
         normalized = normalize_for_search(value, decode_url=decode_url)
         if not normalized:
             return frozenset()
@@ -34,7 +34,13 @@ class _MultiPatternMatcher:
 class EvidenceMatcher:
     """Match polygon names and Monaco context in either FineWeb field."""
 
-    def __init__(self, profiles: Sequence[PolygonProfile]) -> None:
+    def __init__(
+        self,
+        profiles: Sequence[PolygonProfile],
+        *,
+        require_text_context: bool = False,
+    ) -> None:
+        self._require_text_context = require_text_context
         profiles_by_name: dict[str, list[PolygonProfile]] = defaultdict(list)
         for profile in profiles:
             if profile.normalized_name:
@@ -48,6 +54,15 @@ class EvidenceMatcher:
 
     def match(self, document: FineWebDocument) -> tuple[MatchEvidence, ...]:
         values = {"text": document.text, "url": document.url}
+        if self._require_text_context:
+            return self._match_v2(document, values)
+        return self._match_v1(document, values)
+
+    def _match_v1(
+        self,
+        document: FineWebDocument,
+        values: Mapping[str, str],
+    ) -> tuple[MatchEvidence, ...]:
         contexts_by_field, context_phrase = _find_context(values, self._context_matcher)
         if context_phrase is None:
             return ()
@@ -55,18 +70,66 @@ class EvidenceMatcher:
         matched_names = set().union(*names_by_field.values())
         if not matched_names:
             return ()
-        return tuple(
-            evidence
-            for normalized_name in sorted(matched_names)
-            for evidence in _matches_for_name(
-                document,
-                normalized_name=normalized_name,
-                profiles=self._profiles_by_name[normalized_name],
-                names_by_field=names_by_field,
-                contexts_by_field=contexts_by_field,
-                context_phrase=context_phrase,
-            )
+        return _evidence_for_names(
+            document,
+            matched_names=matched_names,
+            profiles_by_name=self._profiles_by_name,
+            names_by_field=names_by_field,
+            contexts_by_field=contexts_by_field,
+            context_phrase=context_phrase,
         )
+
+    def _match_v2(
+        self,
+        document: FineWebDocument,
+        values: Mapping[str, str],
+    ) -> tuple[MatchEvidence, ...]:
+        names_by_field = _find_names(values, self._name_matcher)
+        contexts_by_field, context_phrase = _find_context(values, self._context_matcher)
+        accepted_names = _v2_accepted_names(names_by_field, contexts_by_field)
+        if not accepted_names:
+            return ()
+        return _evidence_for_names(
+            document,
+            matched_names=accepted_names,
+            profiles_by_name=self._profiles_by_name,
+            names_by_field=names_by_field,
+            contexts_by_field=contexts_by_field,
+            context_phrase=context_phrase or "",
+        )
+
+
+def _v2_accepted_names(
+    names_by_field: Mapping[str, frozenset[str]],
+    contexts_by_field: Mapping[str, frozenset[str]],
+) -> set[str]:
+    accepted_names = set(names_by_field["url"])
+    if contexts_by_field.get("text"):
+        accepted_names.update(names_by_field["text"])
+    return accepted_names
+
+
+def _evidence_for_names(
+    document: FineWebDocument,
+    *,
+    matched_names: set[str],
+    profiles_by_name: Mapping[str, Sequence[PolygonProfile]],
+    names_by_field: Mapping[str, frozenset[str]],
+    contexts_by_field: Mapping[str, frozenset[str]],
+    context_phrase: str,
+) -> tuple[MatchEvidence, ...]:
+    return tuple(
+        evidence
+        for normalized_name in sorted(matched_names)
+        for evidence in _matches_for_name(
+            document,
+            normalized_name=normalized_name,
+            profiles=profiles_by_name[normalized_name],
+            names_by_field=names_by_field,
+            contexts_by_field=contexts_by_field,
+            context_phrase=context_phrase,
+        )
+    )
 
 
 def _find_context(
@@ -158,6 +221,7 @@ def _make_evidence(
         context_fields=context_fields,
         matched_name=profile.name,
         context_phrase=context_phrase,
+        text=document.text,
         text_excerpt=_excerpt(document.text if "text" in evidence_fields else ""),
         url_excerpt=_excerpt(document.url if "url" in evidence_fields else ""),
     )

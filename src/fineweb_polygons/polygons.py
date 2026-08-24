@@ -20,6 +20,7 @@ class PolygonReadResult:
     profiles: tuple[PolygonProfile, ...]
     named_count: int
     unnamed_count: int
+    filtered_count: int = 0
 
 
 class _NamedPolygonHandler(osmium.SimpleHandler):
@@ -56,3 +57,12 @@ def read_named_polygon_profiles(pbf_path: Path) -> PolygonReadResult:
         named_count=handler.named_count,
         unnamed_count=handler.unnamed_count,
     )
+
+
+def read_v2_polygon_profiles(pbf_path: Path) -> PolygonReadResult:
+    """Read meaningful, in-boundary named areas from a raw OSM extract."""
+    from fineweb_polygons.v2_profiles import (
+        read_v2_polygon_profiles as read_filtered_profiles,
+    )
+
+    return read_filtered_profiles(pbf_path)

@@ -17,14 +17,16 @@ def normalize_for_search(value: object, *, decode_url: bool = True) -> str:
     text = unicodedata.normalize("NFKC", str(value))
     if decode_url:
         text = unquote(text)
-    return _SEPARATOR_RE.sub(" ", text.casefold()).strip()
+    text = text.casefold()
+    return _SEPARATOR_RE.sub(" ", text).strip()
 
 
-def has_monaco_marker(value: object, *, decode_url: bool = False) -> bool:
+def has_monaco_marker(value: object, *, decode_url: bool = True) -> bool:
     """Cheap, sound prefilter for either accepted Monaco context phrase."""
     if value is None:
         return False
     text = unicodedata.normalize("NFKC", str(value))
     if decode_url:
         text = unquote(text)
-    return "monaco" in text.casefold()
+    text = text.casefold()
+    return "monaco" in text

@@ -11,14 +11,19 @@ def test_normalization_decodes_url_escapes() -> None:
     )
 
 
+def test_normalization_casefolds_after_url_decoding() -> None:
+    assert normalize_for_search("https://example.test/%4d%4f%4e%41%43%4f") == (
+        "https example test monaco"
+    )
+
+
 def test_normalization_returns_empty_for_none() -> None:
     assert normalize_for_search(None) == ""
 
 
-def test_monaco_marker_is_case_insensitive_and_url_aware() -> None:
-    assert has_monaco_marker("MONACO")
-    encoded = "Principality%20of%20%4Donaco"
-    assert has_monaco_marker(encoded, decode_url=True)
-    assert not has_monaco_marker(encoded, decode_url=False)
-    assert not has_monaco_marker(encoded)
-    assert not has_monaco_marker(None)
+def test_monaco_marker_decodes_urls_and_rejects_none() -> None:
+    encoded = "https://example.test/%4d%4f%4e%41%43%4f"
+
+    assert has_monaco_marker(encoded) is True
+    assert has_monaco_marker(encoded, decode_url=False) is False
+    assert has_monaco_marker(None) is False

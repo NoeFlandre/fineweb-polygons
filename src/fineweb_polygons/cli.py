@@ -26,8 +26,7 @@ def main(argv: Sequence[str] | None = None, *, runner: Runner = execute_run) -> 
     parsed = parser.parse_args(arguments)
     if parsed.command == "scan":
         return _run_scan(parsed, runner)
-    # The required subparser currently exposes only the scan command.
-    parser.error(f"unknown command: {parsed.command}")  # pragma: no mutate
+    parser.error(f"unknown command: {parsed.command}")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,6 +38,11 @@ def _build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--shard", type=Path, required=True)
     scan.add_argument("--run-id", default="v1-10bt-000-v2")
     scan.add_argument("--batch-size", type=int, default=8192)
+    scan.add_argument(
+        "--retrieval-version",
+        choices=("v1", "v2"),
+        default="v1",
+    )
     return parser
 
 
@@ -57,6 +61,7 @@ def _run_scan(parsed: argparse.Namespace, runner: Runner) -> int:
         shard_path=parsed.shard,
         run_id=parsed.run_id,
         batch_size=parsed.batch_size,
+        retrieval_version=parsed.retrieval_version,
     )
     try:
         summary = runner(config)

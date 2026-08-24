@@ -11,15 +11,43 @@ tags:
   - reproducibility
 task_categories:
   - text-retrieval
+configs:
+  - config_name: v1
+    data_files:
+      - split: train
+        path: data/monaco-v1-10bt-000-v3.jsonl
+  - config_name: v2
+    data_files:
+      - split: train
+        path: data/v2/monaco-v2-10bt-000-v1.jsonl
 ---
 
 # FineWeb Polygons
 
-FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 starts with named Monaco polygons; the raw OSM extract is kept outside the repository at:
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 and V2 start with Monaco; the raw OSM extract is kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
 
-V1 scans one FineWeb Parquet shard at a time. It matches a polygon name exactly after Unicode normalization and case folding in either FineWeb `text` or `url`, and requires `Monaco` or `Principality of Monaco` in either field as context.
+The version ID is part of the public contract. Existing version IDs are not silently changed; a behavior change gets a new version ID.
+
+## Version contracts
+
+### V1 — named polygon exact matching
+
+Run with `--retrieval-version v1`. From the PBF, V1 keeps every named closed way and polygon relation. A FineWeb document is kept when a polygon name and `Monaco` or `Principality of Monaco` occur in the text or URL. Matching is case-insensitive and exact after normalization. The output keeps the complete FineWeb text.
+
+The uploaded V1 file is the original excerpt-only publication and therefore has
+`text_excerpt` and `url_excerpt` rather than a `text` column. New V1 runs made by
+the current code keep the complete text; the old public file is preserved at its
+original path and is not silently replaced.
+
+### V2 — meaningful in-boundary exact matching
+
+Run with `--retrieval-version v2`. From the raw PBF, V2 keeps named area objects inside the Monaco `admin_level=8` city boundary. It rejects names shorter than three characters, numeric-only names, and labels without letters, then deduplicates normalized names.
+
+For FineWeb, a URL name match is enough. A text name match is kept only when the same text also contains `Monaco` or `Principality of Monaco`. The output keeps the complete FineWeb text, URL, and evidence fields.
+
+The exact definitions are stored in [`src/fineweb_polygons/versions.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/versions.py). Every run manifest copies the selected definition and hashes it as part of the configuration, so a changed definition cannot silently resume an old run. See the [version guide](https://noeflandre.github.io/fineweb-polygons/versions/) for the same contract in a readable format.
 
 ## Foundation contract
 
@@ -28,10 +56,30 @@ V1 scans one FineWeb Parquet shard at a time. It matches a polygon name exactly 
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
+- V1/V2 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
+- Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1 intentionally skips unnamed polygons, aliases, OSM tags, fuzzy matching, embeddings, and classifiers. It produces evidence JSONL on the Seagate and does not upload the raw shard or results to Hugging Face.
+V1/V2 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. They produce evidence JSONL on the Seagate; the raw shard is never uploaded.
+
+## Public tiny-shard artifacts
+
+The public dataset contains the filtered evidence from the first shard:
+
+- V1: `data/monaco-v1-10bt-000-v3.jsonl`
+- V2: `data/v2/monaco-v2-10bt-000-v1.jsonl`
+
+These are evidence records, not a copy of the raw FineWeb shard.
+The published schemas are intentionally documented separately:
+
+- V1 is the original excerpt-only release: it contains `text_excerpt` and
+  `url_excerpt`, but no `text` field.
+- V2 is the full-text release: it contains the complete FineWeb document in
+  `text`, plus the short preview fields.
+
+The code and manifests still preserve the retrieval definition for each version;
+new output should use a new artifact path rather than overwriting a published
+file.
 
 ## First-shard run
 
@@ -52,9 +100,15 @@ uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v1-10bt-000-v2
+
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v2-10bt-000-v1 \
+  --retrieval-version v2
 ```
 
-The run stores chunk checkpoints and a manifest under `runs/v1-10bt-000-v2`, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root. One chunk opens the Parquet shard once and covers at most 32 row groups.
+Each run stores chunk checkpoints and a manifest under its run ID, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root. One chunk opens the Parquet shard once and covers at most 32 row groups.
 
 ## License and upstream data
 
