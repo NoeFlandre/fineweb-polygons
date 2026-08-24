@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.md text diff=markdown
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.cff text eol=lf

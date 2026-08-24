@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fineweb-polygons"
+version = "0.1.0"
+description = "A reproducible foundation for finding FineWeb documents tied to OpenStreetMap polygons."
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = { file = "LICENSE" }
+authors = [{ name = "Noe Flandre" }]
+dependencies = []
+
+[project.scripts]
+fineweb-polygons = "fineweb_polygons.cli:main"
+
+[dependency-groups]
+dev = [
+    "coverage[toml]>=7.8",
+    "mkdocs-material>=9.6",
+    "mutmut>=3.3",
+    "pre-commit>=4.2",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "radon>=6.0",
+    "ruff>=0.15",
+    "ty>=0.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fineweb_polygons"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=fineweb_polygons",
+    "--cov-report=term-missing",
+    "--cov-report=json:coverage.json",
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/fineweb_polygons"]
+omit = ["src/fineweb_polygons/__main__.py"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mutmut]
+source_paths = ["src/fineweb_polygons"]
+pytest_add_cli_args = ["-q"]

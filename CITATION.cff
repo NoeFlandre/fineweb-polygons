@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: "FineWeb Polygons"
+type: software
+version: "0.1.0"
+date-released: 2026-08-24
+abstract: >-
+  A reproducible foundation for finding FineWeb documents tied to
+  OpenStreetMap polygons.
+authors:
+  - family-names: Flandre
+    given-names: Noe
+    affiliation: Independent researcher
+repository-code: https://github.com/NoeFlandre/fineweb-polygons
+url: https://huggingface.co/datasets/NoeFlandre/fineweb-polygons
+license: ODC-By-1.0
+keywords:
+  - FineWeb
+  - OpenStreetMap
+  - geospatial information retrieval
+  - reproducible research

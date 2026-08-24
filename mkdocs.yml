@@ -1,0 +1,27 @@
+site_name: FineWeb Polygons
+site_description: Reproducible foundations for FineWeb documents tied to OpenStreetMap polygons.
+site_url: https://noeflandre.github.io/fineweb-polygons/
+repo_name: NoeFlandre/fineweb-polygons
+repo_url: https://github.com/NoeFlandre/fineweb-polygons
+edit_uri: edit/main/docs/
+exclude_docs: |
+  superpowers/plans/*
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Overview: index.md
+  - Architecture:
+      - Foundation: architecture/foundation.md
+  - Development: development.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
