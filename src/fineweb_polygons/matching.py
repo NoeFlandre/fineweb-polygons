@@ -138,7 +138,7 @@ class EvidenceMatcher:
             return ()
         text_contexts = contexts_by_field["text"]
         accepted_names = set(names_by_field["text"])
-        if not accepted_names or not text_contexts:
+        if not accepted_names:
             return ()
         context_phrase = max(text_contexts, key=lambda phrase: (len(phrase), phrase))
         return _evidence_for_names(
