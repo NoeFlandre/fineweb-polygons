@@ -34,7 +34,7 @@ uv run fineweb-polygons scan \
 
 V1 keeps only named polygon profiles. A match requires the normalized name in `text` or `url`, plus `Monaco` or `Principality of Monaco` in `text` or `url`; matching both fields is not required. The default checkpoint covers 32 row groups, so the scanner opens the shard once per checkpoint and can resume after an interruption.
 
-Use `--retrieval-version v2` or `--retrieval-version v3` to run the corresponding contract. Version definitions are immutable and are copied into each run manifest; use a new version ID for a changed rule.
+Use `--retrieval-version v2`, `--retrieval-version v3`, or `--retrieval-version v4` to run the corresponding contract. V4 reuses V3's meaningful polygon profile and deduplication, but requires the polygon name and Monaco context in FineWeb text and does not use the URL to select documents. Version definitions are immutable and are copied into each run manifest; use a new version ID for a changed rule.
 
 ## Red-green-refactor
 

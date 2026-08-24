@@ -7,7 +7,7 @@ from fineweb_polygons.versions import (
 
 
 def test_retrieval_versions_have_a_stable_publication_order() -> None:
-    assert available_retrieval_versions() == ("v1", "v2", "v3")
+    assert available_retrieval_versions() == ("v1", "v2", "v3", "v4")
 
 
 def test_v1_definition_records_its_complete_contract() -> None:
@@ -59,8 +59,21 @@ def test_v3_definition_requires_both_fields_and_document_deduplication() -> None
     assert definition.deduplicate_documents is True
 
 
+def test_v4_definition_requires_text_name_and_document_deduplication() -> None:
+    definition = get_retrieval_definition("v4")
+
+    assert definition.version == "v4"
+    assert definition.polygon_profile_version == "v4-all-meaningful-polygon-areas"
+    assert definition.matcher_version == "v4-exact-name-and-text-context"
+    assert definition.requires_text_context is True
+    assert definition.requires_url_name is False
+    assert definition.requires_text_name is True
+    assert definition.deduplicate_documents is True
+    assert definition.to_record()["requires_text_name"] is True
+
+
 def test_unknown_retrieval_version_is_rejected() -> None:
     with pytest.raises(
-        ValueError, match=r"\Aretrieval_version must be v1, v2, or v3\Z"
+        ValueError, match=r"\Aretrieval_version must be v1, v2, v3, or v4\Z"
     ):
-        get_retrieval_definition("v4")
+        get_retrieval_definition("v5")

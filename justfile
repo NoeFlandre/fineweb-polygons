@@ -21,7 +21,7 @@ test:
     uv run pytest
 
 docs:
-    uv run mkdocs build --strict
+    uv run mkdocs build --strict --site-dir "/Volumes/Seagate M3/projects/fineweb-polygons/site"
 
 crap:
     uv run pytest
@@ -39,5 +39,8 @@ scan-v2 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-late
 
 scan-v3 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v3" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v3" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v3-10bt-000-v1 --retrieval-version v3
+
+scan-v4 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v4" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v4" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v4-10bt-000-v1 --retrieval-version v4
 
 qa: format-check lint typecheck test crap docs

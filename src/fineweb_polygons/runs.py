@@ -168,6 +168,8 @@ def execute_run(
         "retrieval_version": config.retrieval_version,
         "retrieval_definition": definition.to_record(),
     }
+    if definition.requires_text_name:
+        configuration["require_text_name"] = True
     expected_manifest = _new_manifest(
         run_id=config.run_id,
         layout=layout,
@@ -184,6 +186,7 @@ def execute_run(
     matcher = EvidenceMatcher(
         selected_profiles,
         require_text_context=definition.requires_text_context,
+        require_text_name=definition.requires_text_name,
         require_url_name=definition.requires_url_name,
     )
     started = perf_counter()
@@ -238,6 +241,7 @@ def _select_profiles(
             "v1": read_named_polygon_profiles,
             "v2": read_v2_polygon_profiles,
             "v3": read_v3_polygon_profiles,
+            "v4": read_v3_polygon_profiles,
         }
         reader = readers[retrieval_version]
         result = reader(pbf_path)

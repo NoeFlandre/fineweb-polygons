@@ -327,6 +327,43 @@ def test_v3_rejects_url_context_when_text_lacks_monaco_context() -> None:
     assert matcher.match(document) == ()
 
 
+def test_v4_accepts_polygon_name_and_monaco_context_in_text_only() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+    )
+    document = FineWebDocument(
+        21,
+        "doc-21",
+        "Fontvieille is a district in Monaco.",
+        "https://example.test/unrelated-article",
+    )
+
+    evidence = matcher.match(document)[0]
+
+    assert evidence.matched_fields == ("text",)
+    assert evidence.context_fields == ("text",)
+    assert evidence.context_phrase == "monaco"
+    assert evidence.url_excerpt == ""
+
+
+def test_v4_rejects_polygon_name_only_in_url() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+    )
+    document = FineWebDocument(
+        22,
+        "doc-22",
+        "An unrelated article about Monaco.",
+        "https://example.test/fontvieille",
+    )
+
+    assert matcher.match(document) == ()
+
+
 def test_excerpt_keeps_the_exact_boundary_length() -> None:
     value = "x" * 240
 

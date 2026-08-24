@@ -1,4 +1,4 @@
-"""Fast exact evidence matching for the V1 retrieval rule."""
+"""Fast exact evidence matching for the versioned retrieval rules."""
 
 from __future__ import annotations
 
@@ -32,16 +32,18 @@ class _MultiPatternMatcher:
 
 
 class EvidenceMatcher:
-    """Match polygon names and Monaco context in either FineWeb field."""
+    """Match polygon names and Monaco context under a version contract."""
 
     def __init__(
         self,
         profiles: Sequence[PolygonProfile],
         *,
         require_text_context: bool = False,
+        require_text_name: bool = False,
         require_url_name: bool = False,
     ) -> None:
         self._require_text_context = require_text_context
+        self._require_text_name = require_text_name
         self._require_url_name = require_url_name
         profiles_by_name: dict[str, list[PolygonProfile]] = defaultdict(list)
         for profile in profiles:
@@ -58,6 +60,8 @@ class EvidenceMatcher:
         values = {"text": document.text, "url": document.url}
         if self._require_url_name:
             return self._match_v3(document, values)
+        if self._require_text_name:
+            return self._match_v4(document, values)
         if self._require_text_context:
             return self._match_v2(document, values)
         return self._match_v1(document, values)
@@ -121,6 +125,27 @@ class EvidenceMatcher:
             names_by_field=names_by_field,
             contexts_by_field=contexts_by_field,
             context_phrase=context_phrase or "",
+        )
+
+    def _match_v4(
+        self,
+        document: FineWebDocument,
+        values: Mapping[str, str],
+    ) -> tuple[MatchEvidence, ...]:
+        names_by_field = _find_names(values, self._name_matcher)
+        contexts_by_field, _ = _find_context(values, self._context_matcher)
+        text_contexts = contexts_by_field.get("text", frozenset())
+        accepted_names = set(names_by_field["text"])
+        if not accepted_names or not text_contexts:
+            return ()
+        context_phrase = max(text_contexts, key=lambda phrase: (len(phrase), phrase))
+        return _evidence_for_names(
+            document,
+            matched_names=accepted_names,
+            profiles_by_name=self._profiles_by_name,
+            names_by_field=names_by_field,
+            contexts_by_field=contexts_by_field,
+            context_phrase=context_phrase,
         )
 
 
