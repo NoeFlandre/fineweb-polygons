@@ -16,9 +16,9 @@ For each query, V1 normalizes the name with Unicode normalization, case folding,
 and whitespace collapsing. It searches the FineWeb `text` and `url` fields for
 the normalized name. A document is high-confidence when the normalized name
 appears in at least one of those fields and a case-insensitive Monaco context
-phrase (`Monaco` or `Principality of Monaco`) appears in the combined text and
-URL evidence. The name does not need to appear in both fields. The matcher is
-exact after normalization; it does not use fuzzy matching, aliases, OSM tags,
+phrase (`Monaco` or `Principality of Monaco`) appears in at least one of those
+fields. Neither signal needs to appear in both fields. The matcher is exact
+after normalization; it does not use fuzzy matching, aliases, OSM tags,
 embeddings, or a classifier.
 
 ## Architecture and data flow
