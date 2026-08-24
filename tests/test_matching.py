@@ -364,6 +364,49 @@ def test_v4_rejects_polygon_name_only_in_url() -> None:
     assert matcher.match(document) == ()
 
 
+def test_v4_rejects_polygon_name_without_text_context() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+    )
+    document = FineWebDocument(
+        23,
+        "doc-23",
+        "Fontvieille is a district.",
+        "https://example.test/unrelated-article",
+    )
+
+    assert matcher.match(document) == ()
+
+
+def test_v4_chooses_the_longest_text_context_phrase(monkeypatch) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+    )
+
+    class FakeContextMatcher:
+        def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
+            del value, decode_url
+            return frozenset({"z", "long phrase"})
+
+    monkeypatch.setattr(
+        matcher,
+        "_context_matcher",
+        cast(_MultiPatternMatcher, FakeContextMatcher()),
+    )
+    document = FineWebDocument(
+        24,
+        "doc-24",
+        "Fontvieille Monaco.",
+        "https://example.test/unrelated-article",
+    )
+
+    assert matcher.match(document)[0].context_phrase == "long phrase"
+
+
 def test_excerpt_keeps_the_exact_boundary_length() -> None:
     value = "x" * 240
 

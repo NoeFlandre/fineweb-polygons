@@ -134,7 +134,9 @@ class EvidenceMatcher:
     ) -> tuple[MatchEvidence, ...]:
         names_by_field = _find_names(values, self._name_matcher)
         contexts_by_field, _ = _find_context(values, self._context_matcher)
-        text_contexts = contexts_by_field.get("text", frozenset())
+        if "text" not in contexts_by_field:
+            return ()
+        text_contexts = contexts_by_field["text"]
         accepted_names = set(names_by_field["text"])
         if not accepted_names or not text_contexts:
             return ()
