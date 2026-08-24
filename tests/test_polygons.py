@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from fineweb_polygons.polygons import read_named_polygon_profiles
+from fineweb_polygons.models import PolygonProfile
+from fineweb_polygons.polygons import _NamedPolygonHandler, read_named_polygon_profiles
 
 MINI_OSM_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <osm version="0.6" generator="test">
@@ -34,6 +35,10 @@ MINI_OSM_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <tag k="type" v="multipolygon" />
     <tag k="name" v="Named Relation" />
   </relation>
+  <relation id="21">
+    <member type="way" ref="10" role="outer" />
+    <tag k="type" v="boundary" />
+  </relation>
 </osm>
 """
 
@@ -46,9 +51,37 @@ def test_read_named_polygon_profiles_keeps_only_named_polygon_entities(
 
     result = read_named_polygon_profiles(pbf)
 
-    assert [profile.polygon_id for profile in result.profiles] == [
-        "relation/20",
-        "way/10",
+    assert [(profile.polygon_id, profile.name) for profile in result.profiles] == [
+        ("relation/20", "Named Relation"),
+        ("way/10", "Named Way"),
     ]
     assert result.named_count == 2
-    assert result.unnamed_count == 1
+    assert result.unnamed_count == 2
+
+
+def test_read_named_polygon_profiles_disables_location_loading(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured = {}
+
+    def fake_apply_file(self, path, *, locations):
+        captured["path"] = path
+        captured["locations"] = locations
+        self.profiles = [
+            PolygonProfile.create("way/2", "B"),
+            PolygonProfile.create("way/1", "A"),
+        ]
+        self.named_count = 2
+        self.unnamed_count = 0
+
+    monkeypatch.setattr(_NamedPolygonHandler, "apply_file", fake_apply_file)
+
+    pbf = tmp_path / "mini.osm.pbf"
+    result = read_named_polygon_profiles(pbf)
+
+    assert captured == {"path": str(pbf), "locations": False}
+    assert [profile.polygon_id for profile in result.profiles] == [
+        "way/1",
+        "way/2",
+    ]

@@ -26,7 +26,8 @@ def main(argv: Sequence[str] | None = None, *, runner: Runner = execute_run) -> 
     parsed = parser.parse_args(arguments)
     if parsed.command == "scan":
         return _run_scan(parsed, runner)
-    parser.error(f"unknown command: {parsed.command}")
+    # The required subparser currently exposes only the scan command.
+    parser.error(f"unknown command: {parsed.command}")  # pragma: no mutate
 
 
 def _build_parser() -> argparse.ArgumentParser:

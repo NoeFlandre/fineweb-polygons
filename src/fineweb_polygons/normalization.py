@@ -14,17 +14,17 @@ def normalize_for_search(value: object, *, decode_url: bool = True) -> str:
     """Normalize a field for case-insensitive exact token matching."""
     if value is None:
         return ""
-    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    text = unicodedata.normalize("NFKC", str(value))
     if decode_url:
         text = unquote(text)
-    return _SEPARATOR_RE.sub(" ", text).strip()
+    return _SEPARATOR_RE.sub(" ", text.casefold()).strip()
 
 
-def has_monaco_marker(value: object, *, decode_url: bool = True) -> bool:
+def has_monaco_marker(value: object, *, decode_url: bool = False) -> bool:
     """Cheap, sound prefilter for either accepted Monaco context phrase."""
     if value is None:
         return False
-    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    text = unicodedata.normalize("NFKC", str(value))
     if decode_url:
         text = unquote(text)
-    return "monaco" in text
+    return "monaco" in text.casefold()

@@ -128,7 +128,6 @@ def execute_run(
     """Execute or resume a chunked FineWeb scan."""
     pbf_path, shard_path = _validated_inputs(config)
     layout = _RunLayout.from_config(config)
-    layout.run_dir.mkdir(parents=True, exist_ok=True)
     layout.partitions_dir.mkdir(parents=True, exist_ok=True)
     row_groups = _inspect_row_groups(shard_path)
     partitions = _make_partitions(
@@ -479,7 +478,10 @@ def _timestamp() -> str:
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
             digest.update(chunk)
     return digest.hexdigest()
 

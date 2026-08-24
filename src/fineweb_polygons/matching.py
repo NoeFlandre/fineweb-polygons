@@ -23,7 +23,7 @@ class _MultiPatternMatcher:
             self._automaton.add_word(f" {pattern} ", pattern)
         self._automaton.make_automaton()
 
-    def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
+    def find(self, value: str, *, decode_url: bool = False) -> frozenset[str]:
         normalized = normalize_for_search(value, decode_url=decode_url)
         if not normalized:
             return frozenset()

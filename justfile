@@ -29,6 +29,7 @@ crap:
 
 mutation:
     uv run mutmut run --max-children 1
+    uv run python scripts/check_mutation.py
 
 scan shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v1-10bt-000-v2
