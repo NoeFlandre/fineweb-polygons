@@ -67,3 +67,19 @@ class ProjectPaths:
             self.artifacts_dir,
         ):
             directory.mkdir(parents=True, exist_ok=True)
+
+
+def validate_external_data_root(paths: ProjectPaths) -> None:
+    """Reject a data root equal to or nested below the repository checkout."""
+    if paths.data_root == paths.repository_root or paths.data_root.is_relative_to(
+        paths.repository_root
+    ):
+        raise ValueError("The data root must be external to the repository")
+
+
+def validate_data_path(paths: ProjectPaths, path: Path) -> Path:
+    """Return a resolved data path when it is inside the configured root."""
+    resolved = path.expanduser().resolve()
+    if not resolved.is_relative_to(paths.data_root):
+        raise ValueError(f"Input path must be inside the external data root: {path}")
+    return resolved
