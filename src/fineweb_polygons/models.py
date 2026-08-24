@@ -49,6 +49,7 @@ class MatchEvidence:
     matched_name: str
     context_phrase: str
     text_excerpt: str
+    url_excerpt: str
 
     def to_record(self) -> dict[str, object]:
         """Return a JSON-compatible evidence record."""
@@ -63,4 +64,5 @@ class MatchEvidence:
             "matched_name": self.matched_name,
             "context_phrase": self.context_phrase,
             "text_excerpt": self.text_excerpt,
+            "url_excerpt": self.url_excerpt,
         }
