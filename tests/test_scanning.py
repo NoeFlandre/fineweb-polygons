@@ -56,6 +56,7 @@ def test_scan_row_group_writes_matching_evidence(tmp_path: Path) -> None:
     record = json.loads(output.read_text(encoding="utf-8").strip())
     assert record["fineweb_row_index"] == 1
     assert record["polygon_id"] == "way/1"
+    assert record["text"] == "Fontvieille is in Monaco."
 
 
 def test_scan_row_group_requires_text_and_url(tmp_path: Path) -> None:

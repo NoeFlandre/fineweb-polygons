@@ -33,4 +33,7 @@ mutation:
 scan shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v1-10bt-000-v2
 
+scan-v2 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v2-10bt-000-v1 --retrieval-version v2
+
 qa: format-check lint typecheck test crap docs
