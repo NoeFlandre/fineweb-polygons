@@ -15,11 +15,11 @@ task_categories:
 
 # FineWeb Polygons
 
-FineWeb Polygons is a foundation for finding high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. The first input is Monaco; the raw OSM extract is kept outside the repository at:
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 starts with named Monaco polygons; the raw OSM extract is kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
 
-This repository currently contains only the project foundation. It does not scan OSM, download FineWeb, define relevance, or publish dataset rows.
+V1 scans one FineWeb Parquet shard at a time. It matches a polygon name exactly after Unicode normalization and case folding in either FineWeb `text` or `url`, and requires `Monaco` or `Principality of Monaco` in either field as context.
 
 ## Foundation contract
 
@@ -28,10 +28,33 @@ This repository currently contains only the project foundation. It does not scan
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- Future processing must be resumable, append useful structured context to run logs, and record enough input/configuration/version information to reproduce a run.
+- V1 processing is resumable by Parquet row group, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
 - The future implementation will use small, deep modules with stable interfaces and YAGNI scope.
 
-The polygon-to-document matching approach, FineWeb access strategy, confidence definition, data schema, and partitioning strategy are intentionally deferred for design discussion.
+V1 intentionally skips unnamed polygons, aliases, OSM tags, fuzzy matching, embeddings, and classifiers. It produces evidence JSONL on the Seagate and does not upload the raw shard or results to Hugging Face.
+
+## First-shard run
+
+Keep the Hugging Face cache, virtual environment, raw data, and run outputs on the Seagate:
+
+```bash
+export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/.hf"
+export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache"
+export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons"
+
+uv sync --locked
+hf download HuggingFaceFW/fineweb \
+  --repo-type dataset \
+  --include "sample/10BT/000_00000.parquet" \
+  --local-dir "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/10BT"
+
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/10BT/000_00000.parquet" \
+  --run-id v1-10bt-000
+```
+
+The run stores checkpoints and a manifest under `runs/v1-10bt-000`, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root.
 
 ## License and upstream data
 
