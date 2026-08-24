@@ -66,3 +66,12 @@ def read_v2_polygon_profiles(pbf_path: Path) -> PolygonReadResult:
     )
 
     return read_filtered_profiles(pbf_path)
+
+
+def read_v3_polygon_profiles(pbf_path: Path) -> PolygonReadResult:
+    """Read meaningful named closed ways and valid polygon relations."""
+    from fineweb_polygons.v3_profiles import (
+        read_v3_polygon_profiles as read_all_polygon_profiles,
+    )
+
+    return read_all_polygon_profiles(pbf_path)

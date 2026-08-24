@@ -39,8 +39,10 @@ class EvidenceMatcher:
         profiles: Sequence[PolygonProfile],
         *,
         require_text_context: bool = False,
+        require_url_name: bool = False,
     ) -> None:
         self._require_text_context = require_text_context
+        self._require_url_name = require_url_name
         profiles_by_name: dict[str, list[PolygonProfile]] = defaultdict(list)
         for profile in profiles:
             if profile.normalized_name:
@@ -54,9 +56,32 @@ class EvidenceMatcher:
 
     def match(self, document: FineWebDocument) -> tuple[MatchEvidence, ...]:
         values = {"text": document.text, "url": document.url}
+        if self._require_url_name:
+            return self._match_v3(document, values)
         if self._require_text_context:
             return self._match_v2(document, values)
         return self._match_v1(document, values)
+
+    def _match_v3(
+        self,
+        document: FineWebDocument,
+        values: Mapping[str, str],
+    ) -> tuple[MatchEvidence, ...]:
+        names_by_field = _find_names(values, self._name_matcher)
+        contexts_by_field, context_phrase = _find_context(values, self._context_matcher)
+        accepted_names = _v3_accepted_names(names_by_field, contexts_by_field)
+        if context_phrase is None:
+            return ()
+        if not accepted_names:
+            return ()
+        return _evidence_for_names(
+            document,
+            matched_names=accepted_names,
+            profiles_by_name=self._profiles_by_name,
+            names_by_field=names_by_field,
+            contexts_by_field=contexts_by_field,
+            context_phrase=context_phrase,
+        )
 
     def _match_v1(
         self,
@@ -107,6 +132,15 @@ def _v2_accepted_names(
     if contexts_by_field.get("text"):
         accepted_names.update(names_by_field["text"])
     return accepted_names
+
+
+def _v3_accepted_names(
+    names_by_field: Mapping[str, frozenset[str]],
+    contexts_by_field: Mapping[str, frozenset[str]],
+) -> set[str]:
+    if not contexts_by_field.get("text"):
+        return set()
+    return set(names_by_field["url"]) & set(names_by_field["text"])
 
 
 def _evidence_for_names(

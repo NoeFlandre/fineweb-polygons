@@ -146,9 +146,15 @@ def test_cli_parser_exposes_exact_scan_contract() -> None:
         ).retrieval_version
         == "v1"
     )
-    with pytest.raises(SystemExit):
+    assert (
         parser.parse_args(
             ["scan", "--shard", "shard.parquet", "--retrieval-version", "v3"]
+        ).retrieval_version
+        == "v3"
+    )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["scan", "--shard", "shard.parquet", "--retrieval-version", "v4"]
         )
 
 

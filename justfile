@@ -25,7 +25,7 @@ docs:
 
 crap:
     uv run pytest
-    uv run python scripts/check_crap.py --source src --coverage coverage.json --max-crap 6
+    uv run python scripts/check_crap.py --source src --coverage "/Volumes/Seagate M3/projects/fineweb-polygons/coverage.json" --max-crap 6
 
 mutation:
     uv run mutmut run --max-children 1
@@ -36,5 +36,8 @@ scan shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.
 
 scan-v2 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v2-10bt-000-v1 --retrieval-version v2
+
+scan-v3 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v3" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v3" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v3-10bt-000-v1 --retrieval-version v3
 
 qa: format-check lint typecheck test crap docs

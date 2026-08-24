@@ -15,6 +15,7 @@ from typing import Any
 
 import pyarrow.parquet as pq
 
+from fineweb_polygons.deduplication import deduplicate_matches
 from fineweb_polygons.foundation import (
     ProjectPaths,
     validate_data_path,
@@ -26,6 +27,7 @@ from fineweb_polygons.normalization import NORMALIZATION_VERSION
 from fineweb_polygons.polygons import (
     read_named_polygon_profiles,
     read_v2_polygon_profiles,
+    read_v3_polygon_profiles,
 )
 from fineweb_polygons.scanning import ScanStats, scan_row_groups
 from fineweb_polygons.versions import get_retrieval_definition
@@ -157,10 +159,12 @@ def execute_run(
 
     configuration = {
         "batch_size": config.batch_size,
+        "deduplicate_documents": definition.deduplicate_documents,
         "row_groups_per_partition": config.row_groups_per_partition,
         "matcher_version": definition.matcher_version,
         "normalization_version": NORMALIZATION_VERSION,
         "polygon_profile_version": definition.polygon_profile_version,
+        "require_url_name": definition.requires_url_name,
         "retrieval_version": config.retrieval_version,
         "retrieval_definition": definition.to_record(),
     }
@@ -180,6 +184,7 @@ def execute_run(
     matcher = EvidenceMatcher(
         selected_profiles,
         require_text_context=definition.requires_text_context,
+        require_url_name=definition.requires_url_name,
     )
     started = perf_counter()
     counters = _process_partitions(
@@ -191,14 +196,23 @@ def execute_run(
         matcher=matcher,
     )
     _merge_partitions(layout, partitions)
-    _complete_run(layout, manifest, counters, elapsed=perf_counter() - started)
-    return RunSummary(
-        result_path=layout.result_path,
-        manifest_path=layout.manifest_path,
+    matches_written = counters.matches_written
+    if definition.deduplicate_documents:
+        matches_written = deduplicate_matches(layout.result_path)
+    final_counters = _RunCounters(
         partitions_completed=counters.partitions_completed,
         partitions_skipped=counters.partitions_skipped,
         rows_scanned=counters.rows_scanned,
-        matches_written=counters.matches_written,
+        matches_written=matches_written,
+    )
+    _complete_run(layout, manifest, final_counters, elapsed=perf_counter() - started)
+    return RunSummary(
+        result_path=layout.result_path,
+        manifest_path=layout.manifest_path,
+        partitions_completed=final_counters.partitions_completed,
+        partitions_skipped=final_counters.partitions_skipped,
+        rows_scanned=final_counters.rows_scanned,
+        matches_written=final_counters.matches_written,
     )
 
 
@@ -220,11 +234,12 @@ def _select_profiles(
     retrieval_version: str,
 ) -> tuple[tuple[PolygonProfile, ...], int, int, int]:
     if profiles is None:
-        reader = (
-            read_v2_polygon_profiles
-            if retrieval_version == "v2"
-            else read_named_polygon_profiles
-        )
+        readers = {
+            "v1": read_named_polygon_profiles,
+            "v2": read_v2_polygon_profiles,
+            "v3": read_v3_polygon_profiles,
+        }
+        reader = readers[retrieval_version]
         result = reader(pbf_path)
         return (
             result.profiles,

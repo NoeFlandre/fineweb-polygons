@@ -4,8 +4,9 @@ site_url: https://noeflandre.github.io/fineweb-polygons/
 repo_name: NoeFlandre/fineweb-polygons
 repo_url: https://github.com/NoeFlandre/fineweb-polygons
 edit_uri: edit/main/docs/
+site_dir: /Volumes/Seagate M3/projects/fineweb-polygons/site
 exclude_docs: |
-  superpowers/plans/*
+  superpowers/*
 
 theme:
   name: material

@@ -7,7 +7,7 @@ from fineweb_polygons.versions import (
 
 
 def test_retrieval_versions_have_a_stable_publication_order() -> None:
-    assert available_retrieval_versions() == ("v1", "v2")
+    assert available_retrieval_versions() == ("v1", "v2", "v3")
 
 
 def test_v1_definition_records_its_complete_contract() -> None:
@@ -30,6 +30,8 @@ def test_v1_definition_records_its_complete_contract() -> None:
             "FineWeb text."
         ),
         "requires_text_context": False,
+        "requires_url_name": False,
+        "deduplicate_documents": False,
     }
 
 
@@ -42,8 +44,23 @@ def test_v2_definition_requires_text_context() -> None:
         "v2-exact-name-url-or-text-with-text-country-context"
     )
     assert definition.requires_text_context is True
+    assert definition.requires_url_name is False
+    assert definition.deduplicate_documents is False
+
+
+def test_v3_definition_requires_both_fields_and_document_deduplication() -> None:
+    definition = get_retrieval_definition("v3")
+
+    assert definition.version == "v3"
+    assert definition.polygon_profile_version == "v3-all-meaningful-polygon-areas"
+    assert definition.matcher_version == "v3-exact-name-url-and-text-context"
+    assert definition.requires_text_context is True
+    assert definition.requires_url_name is True
+    assert definition.deduplicate_documents is True
 
 
 def test_unknown_retrieval_version_is_rejected() -> None:
-    with pytest.raises(ValueError, match=r"\Aretrieval_version must be v1 or v2\Z"):
-        get_retrieval_definition("v3")
+    with pytest.raises(
+        ValueError, match=r"\Aretrieval_version must be v1, v2, or v3\Z"
+    ):
+        get_retrieval_definition("v4")

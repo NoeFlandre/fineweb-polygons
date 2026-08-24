@@ -6,6 +6,7 @@ import fineweb_polygons.v2_profiles as v2_module
 from fineweb_polygons.polygons import (
     read_named_polygon_profiles,
     read_v2_polygon_profiles,
+    read_v3_polygon_profiles,
 )
 from fineweb_polygons.v2_profiles import (
     _AreaMaterialization,
@@ -202,6 +203,23 @@ def test_read_v2_polygon_profiles_requires_the_boundary(tmp_path: Path) -> None:
         assert str(error) == "V2 profile requires a Monaco admin_level=8 city boundary"
     else:
         raise AssertionError("expected a missing-boundary error")
+
+
+def test_read_v3_polygon_profiles_delegates_to_v3_reader(
+    tmp_path: Path, monkeypatch
+) -> None:
+    pbf = tmp_path / "mini.osm.pbf"
+    expected = object()
+
+    def fake_reader(path: Path) -> object:
+        assert path == pbf
+        return expected
+
+    monkeypatch.setattr(
+        "fineweb_polygons.v3_profiles.read_v3_polygon_profiles", fake_reader
+    )
+
+    assert read_v3_polygon_profiles(pbf) is expected
 
 
 def test_materialize_area_rejects_non_area_values() -> None:

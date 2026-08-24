@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Literal
 
-RetrievalVersion = Literal["v1", "v2"]
+RetrievalVersion = Literal["v1", "v2", "v3"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +20,8 @@ class RetrievalDefinition:
     document_rule: str
     evidence_rule: str
     requires_text_context: bool
+    requires_url_name: bool
+    deduplicate_documents: bool
 
     def to_record(self) -> dict[str, object]:
         """Return the definition embedded in a run manifest."""
@@ -32,6 +34,8 @@ class RetrievalDefinition:
             "document_rule": self.document_rule,
             "evidence_rule": self.evidence_rule,
             "requires_text_context": self.requires_text_context,
+            "requires_url_name": self.requires_url_name,
+            "deduplicate_documents": self.deduplicate_documents,
         }
 
 
@@ -53,6 +57,8 @@ _DEFINITIONS: Final[dict[RetrievalVersion, RetrievalDefinition]] = {
             "FineWeb text."
         ),
         requires_text_context=False,
+        requires_url_name=False,
+        deduplicate_documents=False,
     ),
     "v2": RetrievalDefinition(
         version="v2",
@@ -73,6 +79,30 @@ _DEFINITIONS: Final[dict[RetrievalVersion, RetrievalDefinition]] = {
             "FineWeb text plus evidence fields and excerpts."
         ),
         requires_text_context=True,
+        requires_url_name=False,
+        deduplicate_documents=False,
+    ),
+    "v3": RetrievalDefinition(
+        version="v3",
+        title="All meaningful polygon areas with URL-and-text exact matching",
+        polygon_profile_version="v3-all-meaningful-polygon-areas",
+        matcher_version="v3-exact-name-url-and-text-context",
+        polygon_rule=(
+            "Keep every named closed way and valid polygon relation; reject "
+            "numeric-only or shorter-than-three-character names and deduplicate "
+            "normalized names."
+        ),
+        document_rule=(
+            "Keep a document only when the polygon name is in the URL and the "
+            "name plus Monaco or Principality of Monaco are both in the text."
+        ),
+        evidence_rule=(
+            "Use case-insensitive exact normalized matching and retain the full "
+            "FineWeb text plus evidence fields and excerpts."
+        ),
+        requires_text_context=True,
+        requires_url_name=True,
+        deduplicate_documents=True,
     ),
 }
 
@@ -81,7 +111,7 @@ def get_retrieval_definition(version: str) -> RetrievalDefinition:
     """Return a frozen definition or reject an unknown version."""
     definition = _DEFINITIONS.get(version)
     if definition is None:
-        raise ValueError("retrieval_version must be v1 or v2") from None
+        raise ValueError("retrieval_version must be v1, v2, or v3") from None
     return definition
 
 

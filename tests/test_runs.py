@@ -166,9 +166,11 @@ def test_run_accepts_v2_retrieval_version_and_records_it(tmp_path: Path) -> None
     )
     assert manifest["configuration"] == {
         "batch_size": 8192,
+        "deduplicate_documents": False,
         "matcher_version": "v2-exact-name-url-or-text-with-text-country-context",
         "normalization_version": "v1-nfkc-casefold-separators",
         "polygon_profile_version": "v2-in-boundary-meaningful-names",
+        "require_url_name": False,
         "retrieval_version": "v2",
         "row_groups_per_partition": 32,
         "retrieval_definition": get_retrieval_definition("v2").to_record(),
@@ -189,6 +191,46 @@ def test_run_accepts_v2_retrieval_version_and_records_it(tmp_path: Path) -> None
     assert manifest["status"] == "complete"
     assert manifest["run_id"] == config.run_id
     assert manifest["partitions"][0]["status"] == "complete"
+
+
+def test_v3_run_deduplicates_final_matches_and_records_the_contract(
+    tmp_path: Path,
+) -> None:
+    config, shard = make_config(tmp_path)
+    pq.write_table(
+        pa.table(
+            {
+                "id": ["doc-1", "doc-1", "doc-1"],
+                "text": ["Fontvieille is in Monaco."] * 3,
+                "url": ["https://example.test/fontvieille"] * 3,
+            }
+        ),
+        shard,
+        row_group_size=1,
+    )
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v3-case",
+        retrieval_version="v3",
+    )
+    profiles = (PolygonProfile.create("way/1", "Fontvieille"),)
+
+    first = execute_run(config, profiles=profiles)
+    first_bytes = first.result_path.read_bytes()
+    second = execute_run(config, profiles=profiles)
+    manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+
+    assert first.matches_written == 1
+    assert second.matches_written == 1
+    assert second.partitions_skipped == 1
+    assert second.result_path.read_bytes() == first_bytes
+    assert len(first.result_path.read_text(encoding="utf-8").splitlines()) == 1
+    assert manifest["configuration"]["require_url_name"] is True
+    assert manifest["configuration"]["deduplicate_documents"] is True
+    assert manifest["matches_written"] == 1
+    assert manifest["partitions"][0]["stats"]["matches_written"] == 3
 
 
 def test_execute_run_passes_raw_profile_inputs_and_v2_context_requirement(
@@ -215,6 +257,7 @@ def test_execute_run_passes_raw_profile_inputs_and_v2_context_requirement(
 
     def fake_matcher(profiles, **kwargs):
         captured["require_text_context"] = kwargs["require_text_context"]
+        captured["require_url_name"] = kwargs["require_url_name"]
         return real_matcher(profiles, **kwargs)
 
     monkeypatch.setattr(runs_module, "_select_profiles", fake_select)
@@ -227,7 +270,28 @@ def test_execute_run_passes_raw_profile_inputs_and_v2_context_requirement(
         "profiles": None,
         "retrieval_version": "v2",
         "require_text_context": True,
+        "require_url_name": False,
     }
+
+
+def test_select_profiles_dispatches_v3_reader(tmp_path: Path, monkeypatch) -> None:
+    pbf = tmp_path / "monaco.osm.pbf"
+    expected = PolygonReadResult(
+        profiles=(PolygonProfile.create("way/1", "Fontvieille"),),
+        named_count=1,
+        unnamed_count=2,
+        filtered_count=3,
+    )
+    monkeypatch.setattr(runs_module, "read_v3_polygon_profiles", lambda _: expected)
+
+    result = _select_profiles(pbf, None, retrieval_version="v3")
+
+    assert result == (
+        expected.profiles,
+        expected.named_count,
+        expected.unnamed_count,
+        expected.filtered_count,
+    )
 
 
 def test_execute_run_records_elapsed_seconds_and_summary_paths(
@@ -267,10 +331,15 @@ def test_select_profiles_uses_the_requested_raw_pbf_reader(
         calls.append(("v2", path))
         return expected
 
+    def v3_reader(path: Path) -> PolygonReadResult:
+        calls.append(("v3", path))
+        return expected
+
     import fineweb_polygons.runs as runs_module
 
     monkeypatch.setattr(runs_module, "read_named_polygon_profiles", v1_reader)
     monkeypatch.setattr(runs_module, "read_v2_polygon_profiles", v2_reader)
+    monkeypatch.setattr(runs_module, "read_v3_polygon_profiles", v3_reader)
     pbf = tmp_path / "monaco.osm.pbf"
 
     assert _select_profiles(pbf, None, retrieval_version="v1") == (
@@ -285,7 +354,13 @@ def test_select_profiles_uses_the_requested_raw_pbf_reader(
         5,
         6,
     )
-    assert calls == [("v1", pbf), ("v2", pbf)]
+    assert _select_profiles(pbf, None, retrieval_version="v3") == (
+        expected.profiles,
+        4,
+        5,
+        6,
+    )
+    assert calls == [("v1", pbf), ("v2", pbf), ("v3", pbf)]
 
 
 def test_select_profiles_with_explicit_profiles_has_zero_source_counts(

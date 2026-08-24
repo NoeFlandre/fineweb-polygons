@@ -40,7 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--batch-size", type=int, default=8192)
     scan.add_argument(
         "--retrieval-version",
-        choices=("v1", "v2"),
+        choices=("v1", "v2", "v3"),
         default="v1",
     )
     return parser

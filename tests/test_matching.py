@@ -259,6 +259,74 @@ def test_v2_url_only_evidence_keeps_text_excerpt_empty() -> None:
     assert matcher.match(document)[0].to_record()["text_excerpt"] == ""
 
 
+def test_v3_requires_name_in_url_and_name_with_context_in_text() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_url_name=True,
+    )
+    document = FineWebDocument(
+        17,
+        "doc-17",
+        "Fontvieille is in Monaco.",
+        "https://example.test/fontvieille",
+    )
+
+    evidence = matcher.match(document)[0]
+
+    assert evidence.matched_fields == ("text", "url")
+    assert evidence.context_fields == ("text",)
+    assert evidence.context_phrase == "monaco"
+
+
+def test_v3_rejects_a_name_only_in_the_url() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_url_name=True,
+    )
+    document = FineWebDocument(
+        18,
+        "doc-18",
+        "An unrelated page about Monaco.",
+        "https://example.test/fontvieille",
+    )
+
+    assert matcher.match(document) == ()
+
+
+def test_v3_rejects_a_name_only_in_text_even_when_url_has_monaco() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_url_name=True,
+    )
+    document = FineWebDocument(
+        19,
+        "doc-19",
+        "Fontvieille is a venue in Monaco.",
+        "https://monaco.example.test/report",
+    )
+
+    assert matcher.match(document) == ()
+
+
+def test_v3_rejects_url_context_when_text_lacks_monaco_context() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_url_name=True,
+    )
+    document = FineWebDocument(
+        20,
+        "doc-20",
+        "Fontvieille is a venue.",
+        "https://monaco.example.test/fontvieille",
+    )
+
+    assert matcher.match(document) == ()
+
+
 def test_excerpt_keeps_the_exact_boundary_length() -> None:
     value = "x" * 240
 
