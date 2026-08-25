@@ -90,6 +90,30 @@ sentence containing the polygon name, the sentence containing the country name,
 and the closest normalized distance. V6 does not write `text_excerpt` or
 `url_excerpt`.
 
+## V7 sentence lists
+
+V7 is a post-processing step over the two V6 artifacts. Install the locked
+`wtpsplit[onnx-cpu]` dependency and keep the model cache on the Seagate:
+
+```bash
+export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7"
+export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
+export TRANSFORMERS_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/transformers"
+
+uv run fineweb-polygons segment-v7 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v6-monaco-10bt-000-v1-matches.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v7-monaco-10bt-000-v1/manifest.json"
+```
+
+Repeat the command with the Liechtenstein V6 input and V7 output paths. The
+default V7 model is `sat-3l-sm`; it uses ONNX Runtime, prefers CoreML on this
+Mac, and keeps CPU available as a fallback. V7 preserves the complete `text`,
+adds an ordered `sentences` list, and fails if joining that list does not
+reconstruct the original text exactly. A matching completed manifest lets a
+restart reuse the output without loading the model.
+
 ## Red-green-refactor
 
 New behavior follows TDD:

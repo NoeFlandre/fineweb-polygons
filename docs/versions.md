@@ -2,7 +2,7 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`.
+Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7 is a post-processing version: it adds sentence lists to V6 without changing which documents were selected.
 
 ## V1
 
@@ -79,7 +79,7 @@ The selected definition is copied into every run manifest under `configuration.r
 
 ## Published Hugging Face files
 
-The public dataset exposes V1, V2, V3, V4, V5, and V6 as separate configs. Their retrieval rules
+The public dataset exposes V1, V2, V3, V4, V5, V6, and V7 as separate configs. Their retrieval rules
 are comparable, but their historical evidence schemas are not identical:
 
 - `v1/train` is the original excerpt-only release. It has `text_excerpt` and
@@ -120,6 +120,31 @@ CLI flag: retrieval version `v6`
 V6 publishes Monaco and Liechtenstein as separate viewer splits. The V6 schema
 is intentionally different from V1–V5 because its sentence fields replace both
 excerpt fields.
+
+## V7
+
+V7 is a post-processing version, so it is not passed to `scan
+--retrieval-version`. It reads each V6 JSONL artifact and runs `sat-3l-sm` from
+`wtpsplit` over the complete `text` field.
+
+- It preserves every V6 field and adds `sentences`, an ordered JSON list of the
+  original sentence strings.
+- It uses `split_on_input_newlines=false` and `strip_whitespace=false` so web
+  line breaks are not silently treated as sentence boundaries and source
+  whitespace remains visible.
+- It rejects any model output for which `''.join(sentences) != text`.
+- It records the source and result SHA-256 values, model ID, ONNX Runtime
+  providers, batch settings, row count, and sentence count in the V7 manifest.
+- It writes output and manifests atomically and reuses a completed result when
+  all fingerprints still match.
+
+The public V7 files are separate viewer splits:
+
+- `v7/monaco`: 45 rows and 4,569 sentences.
+- `v7/liechtenstein`: 6 rows and 328 sentences.
+
+V7 retains the complete `text` for auditability. It uploads neither the raw
+FineWeb/OSM inputs nor the sentence model.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.

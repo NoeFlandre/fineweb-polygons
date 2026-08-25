@@ -11,7 +11,7 @@ The repository contains code, tests, configuration, documentation, and small met
 ├── raw/          # immutable source inputs, including Monaco OSM extracts
 ├── runs/         # manifests, checkpoints, and V5 frequency artifacts
 ├── logs/         # run logs and diagnostics
-└── artifacts/    # generated, reviewable outputs
+└── artifacts/    # generated, reviewable outputs, including V7 sentence lists
 ```
 
 `ProjectPaths` is the only current code surface for this layout. It accepts an environment override for tests and controlled deployments, while defaulting to the Seagate path. The repository must never silently fall back to a local data directory.
@@ -41,6 +41,18 @@ one area and in no more than 0.1% of FineWeb documents. The configured country
 name is context only, never a polygon candidate. A document then needs both the selected name and the
 exact country name in the same text. The URL is evidence only. The matcher is
 an Aho-Corasick exact-token matcher, and the full text is retained.
+
+## V7 sentence post-processing contract
+
+V7 reads a completed V6 JSONL artifact rather than the FineWeb shard. It sends
+the complete `text` values to `sat-3l-sm` in bounded batches, preserves row
+order and all V6 fields, and adds an ordered `sentences` list.
+`split_on_input_newlines=false` and `strip_whitespace=false` keep the source
+representation auditable. Every row must satisfy `''.join(sentences) == text`;
+output and its manifest are published with atomic replacement. The manifest
+fingerprints the V6 input, output, model, providers, and segmentation settings,
+so a completed run can be reused safely. The model cache and all generated
+files remain on the Seagate.
 
 ## Logging contract
 

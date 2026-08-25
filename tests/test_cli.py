@@ -9,6 +9,7 @@ import fineweb_polygons.cli as cli_module
 from fineweb_polygons.cli import _build_parser, main
 from fineweb_polygons.foundation import DEFAULT_DATA_ROOT
 from fineweb_polygons.runs import RunSummary
+from fineweb_polygons.v7 import V7RunSummary
 
 
 def test_cli_reports_foundation_only(capsys) -> None:
@@ -207,6 +208,191 @@ def test_cli_requires_a_subcommand_and_a_shard() -> None:
         parser.parse_args(
             ["scan", "--shard", "shard.parquet", "--retrieval-version", "v7"]
         )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["segment-v7", "--output", "v7.jsonl", "--manifest", "manifest.json"]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["segment-v7", "--input", "v6.jsonl", "--manifest", "manifest.json"]
+        )
+    with pytest.raises(SystemExit):
+        parser.parse_args(["segment-v7", "--input", "v6.jsonl", "--output", "v7.jsonl"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "segment-v7",
+                "--input",
+                "v6.jsonl",
+                "--output",
+                "v7.jsonl",
+                "--manifest",
+                "manifest.json",
+                "--model-id",
+                "other-model",
+            ]
+        )
+
+
+def test_cli_parser_exposes_the_separate_v7_segmentation_command() -> None:
+    parser = _build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "segment-v7",
+            "--input",
+            "v6.jsonl",
+            "--output",
+            "v7.jsonl",
+            "--manifest",
+            "manifest.json",
+        ]
+    )
+
+    assert parsed.command == "segment-v7"
+    assert parsed.data_root == DEFAULT_DATA_ROOT
+    assert parsed.input == Path("v6.jsonl")
+    assert parsed.output == Path("v7.jsonl")
+    assert parsed.manifest == Path("manifest.json")
+    assert parsed.batch_size == 32
+    assert parsed.model_id == "sat-3l-sm"
+    explicit_model = parser.parse_args(
+        [
+            "segment-v7",
+            "--input",
+            "v6.jsonl",
+            "--output",
+            "v7.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--model-id",
+            "sat-3l-sm",
+        ]
+    )
+    assert explicit_model.model_id == "sat-3l-sm"
+    subparsers = next(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    segment_help = next(
+        action.help
+        for action in subparsers._choices_actions
+        if action.dest == "segment-v7"
+    )
+    assert segment_help == "split V6 documents into exact sentence lists"
+
+
+def test_cli_runs_v7_segmentation_and_serializes_its_summary(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    data_root = tmp_path / "external-é"
+    captured = {}
+    constructor_kwargs = {}
+
+    def fake_config(**kwargs):
+        constructor_kwargs.update(kwargs)
+        return argparse.Namespace(**kwargs)
+
+    monkeypatch.setattr(cli_module, "V7RunConfig", fake_config)
+
+    def fake_runner(config):
+        captured["config"] = config
+        return V7RunSummary(
+            output_path=data_root / "artifacts" / "v7.jsonl",
+            manifest_path=data_root / "runs" / "v7" / "manifest.json",
+            rows_processed=2,
+            sentences_written=3,
+            result_sha256="result-sha",
+        )
+
+    assert (
+        main(
+            [
+                "segment-v7",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "artifacts" / "v6.jsonl"),
+                "--output",
+                str(data_root / "artifacts" / "v7.jsonl"),
+                "--manifest",
+                str(data_root / "runs" / "v7" / "manifest.json"),
+                "--batch-size",
+                "8",
+            ],
+            v7_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["config"].input_path == data_root / "artifacts" / "v6.jsonl"
+    assert captured["config"].output_path == data_root / "artifacts" / "v7.jsonl"
+    assert captured["config"].manifest_path == (
+        data_root / "runs" / "v7" / "manifest.json"
+    )
+    assert captured["config"].batch_size == 8
+    assert captured["config"].model_id == "sat-3l-sm"
+    assert constructor_kwargs["model_id"] == "sat-3l-sm"
+    assert (
+        capsys.readouterr().out
+        == json.dumps(
+            {
+                "manifest_path": str(data_root / "runs" / "v7" / "manifest.json"),
+                "output_path": str(data_root / "artifacts" / "v7.jsonl"),
+                "result_sha256": "result-sha",
+                "rows_processed": 2,
+                "sentences_written": 3,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+
+def test_cli_v7_passes_explicit_json_serialization_flags(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    data_root = tmp_path / "external"
+    captured: dict[str, object] = {}
+
+    def fake_dumps(value: object, **kwargs: object) -> str:
+        captured["value"] = value
+        captured["kwargs"] = kwargs
+        return "serialized"
+
+    def fake_runner(config):
+        return V7RunSummary(
+            output_path=data_root / "v7.jsonl",
+            manifest_path=data_root / "manifest.json",
+            rows_processed=1,
+            sentences_written=2,
+            result_sha256="sha",
+        )
+
+    monkeypatch.setattr(cli_module.json, "dumps", fake_dumps)
+
+    assert (
+        main(
+            [
+                "segment-v7",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v6.jsonl"),
+                "--output",
+                str(data_root / "v7.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+            ],
+            v7_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["kwargs"] == {"ensure_ascii": False, "sort_keys": True}
+    assert capsys.readouterr().out == "serialized\n"
 
 
 def test_cli_uses_default_pbf_path_and_reports_all_summary_fields(
@@ -352,3 +538,41 @@ def test_cli_reports_runner_errors_as_exit_code_two(
     )
 
     assert capsys.readouterr().err == f"error: {error}\n"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        FileNotFoundError("missing"),
+        OSError("disk"),
+        RuntimeError("runtime"),
+        ValueError("bad"),
+    ],
+)
+def test_cli_reports_v7_runner_errors_as_exit_code_two(
+    tmp_path: Path, capsys, error: Exception
+) -> None:
+    def failing_runner(config):
+        raise error
+
+    assert (
+        main(
+            [
+                "segment-v7",
+                "--data-root",
+                str(tmp_path / "external"),
+                "--input",
+                str(tmp_path / "external" / "v6.jsonl"),
+                "--output",
+                str(tmp_path / "external" / "v7.jsonl"),
+                "--manifest",
+                str(tmp_path / "external" / "manifest.json"),
+            ],
+            v7_runner=failing_runner,
+        )
+        == 2
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"error: {error}\n"

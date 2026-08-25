@@ -40,6 +40,12 @@ configs:
         path: data/v6/monaco-v6-10bt-000-v1.jsonl
       - split: liechtenstein
         path: data/v6/liechtenstein-v6-10bt-000-v1.jsonl
+  - config_name: v7
+    data_files:
+      - split: monaco
+        path: data/v7/monaco-v7-10bt-000-v1.jsonl
+      - split: liechtenstein
+        path: data/v7/liechtenstein-v7-10bt-000-v1.jsonl
 ---
 
 # FineWeb Polygons
@@ -115,11 +121,11 @@ and skips the frequency pass.
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass.
+- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass. V7 is a content-fingerprinted, atomic post-processing run that can reuse a completed output without rerunning the model.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. They produce evidence JSONL on the Seagate; the raw shard is never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
 
 ## Public tiny-shard artifacts
 
@@ -137,6 +143,8 @@ Hugging Face viewer.
 - V5 Liechtenstein: `data/v5/liechtenstein-v5-10bt-000-v2.jsonl`
 - V6 Monaco: `data/v6/monaco-v6-10bt-000-v1.jsonl`
 - V6 Liechtenstein: `data/v6/liechtenstein-v6-10bt-000-v1.jsonl`
+- V7 Monaco: `data/v7/monaco-v7-10bt-000-v1.jsonl`
+- V7 Liechtenstein: `data/v7/liechtenstein-v7-10bt-000-v1.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -188,6 +196,17 @@ FineWeb text, the closest normalized distance, and the original-text sentence
 for the polygon name and country name. V6 does not include `text_excerpt` or
 `url_excerpt` columns. The published Monaco and Liechtenstein files are separate
 viewer splits under `data/v6/`.
+
+### V7 — exact sentence lists from V6
+
+V7 is a post-processing version, not a new retrieval rule. It reads the
+published V6 rows, keeps every V6 field including the complete `text`, and adds
+an ordered `sentences` list produced by `sat-3l-sm` from `wtpsplit`. The splitter
+uses `split_on_input_newlines=false` and `strip_whitespace=false`; the pipeline
+requires `''.join(sentences) == text`, so it cannot silently rewrite the source
+document. Monaco has 45 rows and 4,569 sentences; Liechtenstein has 6 rows and
+328 sentences. The model and segmentation settings are recorded in each V7
+manifest. V7 does not upload the model or any raw FineWeb/OSM data.
 
 The code and manifests still preserve the retrieval definition for each version;
 new output should use a new artifact path rather than overwriting a published
@@ -250,6 +269,25 @@ uv run fineweb-polygons scan \
   --run-id v5-liechtenstein-10bt-000-v2 \
   --retrieval-version v5 \
   --country-name "Liechtenstein"
+```
+
+V7 sentence segmentation reads those V6 artifacts and writes new artifacts;
+all paths below remain on the Seagate:
+
+```bash
+export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7"
+
+uv run fineweb-polygons segment-v7 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v6-monaco-10bt-000-v1-matches.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v7-monaco-10bt-000-v1/manifest.json"
+
+uv run fineweb-polygons segment-v7 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v6-liechtenstein-10bt-000-v1-matches.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-liechtenstein-10bt-000-v1-sentences.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v7-liechtenstein-10bt-000-v1/manifest.json"
 ```
 
 ## License and upstream data
