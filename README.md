@@ -15,11 +15,11 @@ configs:
   - config_name: v1
     data_files:
       - split: train
-        path: data/monaco-v1-10bt-000-v3.jsonl
+        path: data/v1/monaco-v1-10bt-000-v3.jsonl
   - config_name: v2
     data_files:
       - split: train
-        path: data/v2/monaco-v2-10bt-000-v1.jsonl
+        path: data/v2/monaco-v2-10bt-000-v2.jsonl
   - config_name: v3
     data_files:
       - split: train
@@ -28,13 +28,28 @@ configs:
     data_files:
       - split: train
         path: data/v4/monaco-v4-10bt-000-v1.jsonl
+  - config_name: v5
+    data_files:
+      - split: monaco
+        path: data/v5/monaco-v5-10bt-000-v3.jsonl
+      - split: liechtenstein
+        path: data/v5/liechtenstein-v5-10bt-000-v2.jsonl
+  - config_name: v6
+    data_files:
+      - split: monaco
+        path: data/v6/monaco-v6-10bt-000-v1.jsonl
+      - split: liechtenstein
+        path: data/v6/liechtenstein-v6-10bt-000-v1.jsonl
 ---
 
 # FineWeb Polygons
 
-FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1, V2, V3, and V4 start with Monaco; the raw OSM extract is kept outside the repository at:
+[GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
+
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 and V6 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
+and `/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf`.
 
 The version ID is part of the public contract. Existing version IDs are not silently changed; a behavior change gets a new version ID.
 
@@ -69,6 +84,30 @@ A FineWeb document is kept when the polygon name and `Monaco` or `Principality o
 
 The exact definitions are stored in [`src/fineweb_polygons/versions.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/versions.py). Every run manifest copies the selected definition and hashes it as part of the configuration, so a changed definition cannot silently resume an old run. See the [version guide](https://noeflandre.github.io/fineweb-polygons/versions/) for the same contract in a readable format.
 
+### V5 - specific polygon areas with country-in-text matching
+
+Run with the v5 retrieval version and pass the relevant country name.
+V5 starts with every meaningful named area from the PBF, just like V3 and V4.
+It does not search for or require a country boundary.
+
+Before retrieving documents, V5 counts each normalized polygon name:
+
+1. A name must occur in only one OSM area.
+2. It must occur in no more than 0.1% of the FineWeb shard's documents.
+3. The configured country name is context only; it is never kept as a polygon
+   candidate.
+
+A document is kept only when the selected polygon name and the exact country
+name both occur in the FineWeb text. The URL is retained as evidence but does
+not select a document. Matching is case-insensitive and exact after
+normalization. Results keep the complete FineWeb text and are deduplicated per
+polygon and FineWeb document.
+
+The first V5 pass writes a name-frequency.json file inside the run directory.
+Its input fingerprints, counts, cutoff, and retained names are recorded there
+and its SHA-256 is copied into the run manifest. A restart reuses this artifact
+and skips the frequency pass.
+
 ## Foundation contract
 
 - `uv` owns the locked Python environment.
@@ -76,20 +115,28 @@ The exact definitions are stored in [`src/fineweb_polygons/versions.py`](https:/
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1/V2/V3/V4 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest.
+- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. They produce evidence JSONL on the Seagate; the raw shard is never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. They produce evidence JSONL on the Seagate; the raw shard is never uploaded.
 
 ## Public tiny-shard artifacts
 
 The public dataset contains the filtered evidence from the first shard:
 
-- V1: `data/monaco-v1-10bt-000-v3.jsonl`
-- V2: `data/v2/monaco-v2-10bt-000-v1.jsonl`
+V5 and V6 publish one split for Monaco and one split for Liechtenstein. Both use the
+same full-text evidence schema and can be inspected independently in the
+Hugging Face viewer.
+
+- V1: `data/v1/monaco-v1-10bt-000-v3.jsonl`
+- V2: `data/v2/monaco-v2-10bt-000-v2.jsonl`
 - V3: `data/v3/monaco-v3-10bt-000-v1.jsonl`
 - V4: `data/v4/monaco-v4-10bt-000-v1.jsonl`
+- V5 Monaco: `data/v5/monaco-v5-10bt-000-v3.jsonl`
+- V5 Liechtenstein: `data/v5/liechtenstein-v5-10bt-000-v2.jsonl`
+- V6 Monaco: `data/v6/monaco-v6-10bt-000-v1.jsonl`
+- V6 Liechtenstein: `data/v6/liechtenstein-v6-10bt-000-v1.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -117,6 +164,30 @@ removes the URL condition, the result is a higher-recall baseline and is still
 broad for generic names: 1,067 records use the polygon name `Monaco`. This is
 documented as an experiment, not as a claim that every text-only match is
 already semantically correct.
+
+The corrected V5 runs use the same 1,048,581-document shard. Monaco started
+with 741 normalized names, kept 713 after removing 23 repeated OSM names, four
+names above the 0.1% FineWeb cutoff, and the country name itself, then wrote
+61 deduplicated records across 33 polygon names. Liechtenstein started with
+565 names, kept 524, and wrote 12 deduplicated records across 11 polygon
+names. Every result has the complete text; 57 Monaco and 10 Liechtenstein
+records matched only in text, while the remaining four and two also had the
+name in the URL. The country name appeared only as context.
+
+These are still lexical results, not semantic proof. Manual review found
+some false positives such as Buckingham, Bel Air, P 1, and Maxi. Frequency
+filtering removes very common labels but cannot know whether a short name is
+the intended place; a later version will need stronger evidence for that.
+
+### V6 — local text-span evidence
+
+V6 keeps the V5 polygon and frequency rules, then requires the selected polygon
+name and configured country name to be within 500 normalized characters in the
+FineWeb text. The URL is not a selection condition. Each V6 row keeps the full
+FineWeb text, the closest normalized distance, and the original-text sentence
+for the polygon name and country name. V6 does not include `text_excerpt` or
+`url_excerpt` columns. The published Monaco and Liechtenstein files are separate
+viewer splits under `data/v6/`.
 
 The code and manifests still preserve the retrieval definition for each version;
 new output should use a new artifact path rather than overwriting a published
@@ -162,6 +233,24 @@ uv run fineweb-polygons scan \
 ```
 
 Each run stores chunk checkpoints and a manifest under its run ID, logs under `logs/`, and merged evidence under `artifacts/`, all below the Seagate project root. One chunk opens the Parquet shard once and covers at most 32 row groups.
+
+V5 commands for the two corrected runs:
+
+```bash
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v5-monaco-10bt-000-v3 \
+  --retrieval-version v5 \
+  --country-name "Monaco"
+
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v5-liechtenstein-10bt-000-v2 \
+  --retrieval-version v5 \
+  --country-name "Liechtenstein"
+```
 
 ## License and upstream data
 

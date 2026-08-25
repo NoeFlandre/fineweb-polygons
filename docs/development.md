@@ -36,6 +36,60 @@ V1 keeps only named polygon profiles. A match requires the normalized name in `t
 
 Use `--retrieval-version v2`, `--retrieval-version v3`, or `--retrieval-version v4` to run the corresponding contract. V4 reuses V3's meaningful polygon profile and deduplication, but requires the polygon name and Monaco context in FineWeb text and does not use the URL to select documents. Version definitions are immutable and are copied into each run manifest; use a new version ID for a changed rule.
 
+## V5 country runs
+
+Use retrieval version v5 with the relevant country name:
+
+```bash
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v5-monaco-10bt-000-v3 \
+  --retrieval-version v5 \
+  --country-name "Monaco"
+
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v5-liechtenstein-10bt-000-v2 \
+  --retrieval-version v5 \
+  --country-name "Liechtenstein"
+```
+
+V5 starts from all meaningful named PBF areas. It counts name frequency in OSM
+and in FineWeb text, keeps OSM-unique names at or below the 0.1% document
+cutoff, then requires the selected name and country name in the same text.
+The URL is evidence only. The frequency artifact is saved in the run directory
+and reused on restart.
+
+## V6 country runs
+
+Run V6 with the same country-specific inputs and a distinct run ID:
+
+```bash
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v6-monaco-10bt-000-v1 \
+  --retrieval-version v6 \
+  --country-name "Monaco"
+
+uv run fineweb-polygons scan \
+  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --run-id v6-liechtenstein-10bt-000-v1 \
+  --retrieval-version v6 \
+  --country-name "Liechtenstein"
+```
+
+V6 applies V5's PBF name cleanup, OSM uniqueness filter, and 0.1% FineWeb
+frequency cutoff. It then requires the polygon name and configured country name
+in the FineWeb text within 500 normalized characters. The URL is not a
+selection condition. Each output row keeps the full text, the original-text
+sentence containing the polygon name, the sentence containing the country name,
+and the closest normalized distance. V6 does not write `text_excerpt` or
+`url_excerpt`.
+
 ## Red-green-refactor
 
 New behavior follows TDD:

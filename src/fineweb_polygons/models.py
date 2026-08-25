@@ -51,10 +51,13 @@ class MatchEvidence:
     text: str
     text_excerpt: str
     url_excerpt: str
+    name_country_distance: int | None = None
+    polygon_name_sentence: str | None = None
+    country_name_sentence: str | None = None
 
     def to_record(self) -> dict[str, object]:
         """Return a JSON-compatible evidence record."""
-        return {
+        record = {
             "polygon_id": self.polygon_id,
             "polygon_name": self.polygon_name,
             "fineweb_row_index": self.fineweb_row_index,
@@ -65,6 +68,13 @@ class MatchEvidence:
             "matched_name": self.matched_name,
             "context_phrase": self.context_phrase,
             "text": self.text,
-            "text_excerpt": self.text_excerpt,
-            "url_excerpt": self.url_excerpt,
         }
+        if self.polygon_name_sentence is None or self.country_name_sentence is None:
+            record["text_excerpt"] = self.text_excerpt
+            record["url_excerpt"] = self.url_excerpt
+        else:
+            record["polygon_name_sentence"] = self.polygon_name_sentence
+            record["country_name_sentence"] = self.country_name_sentence
+        if self.name_country_distance is not None:
+            record["name_country_distance"] = self.name_country_distance
+        return record

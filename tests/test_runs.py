@@ -28,6 +28,7 @@ from fineweb_polygons.runs import (
     execute_run,
 )
 from fineweb_polygons.scanning import ScanStats
+from fineweb_polygons.specificity import NameFrequency, SpecificityResult
 from fineweb_polygons.versions import get_retrieval_definition
 
 
@@ -276,6 +277,654 @@ def test_v4_run_deduplicates_text_only_matches_and_records_the_contract(
     assert manifest["configuration"]["retrieval_version"] == "v4"
 
 
+def test_v5_run_saves_frequency_artifact_and_resumes_it(
+    tmp_path: Path,
+) -> None:
+    config, shard = make_config(tmp_path)
+    pq.write_table(
+        pa.table(
+            {
+                "id": ["doc-1", "doc-1"],
+                "text": ["Monaco is mentioned here."] * 2,
+                "url": ["https://example.test/unrelated"] * 2,
+            }
+        ),
+        shard,
+        row_group_size=1,
+    )
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v5-case",
+        retrieval_version="v5",
+        country_name="Monaco",
+    )
+    profiles = (PolygonProfile.create("relation/1", "Monaco"),)
+
+    first = execute_run(config, profiles=profiles)
+    second = execute_run(config, profiles=profiles)
+    manifest = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    artifact_path = config.paths.runs_dir / config.run_id / "name-frequency.json"
+    log_records = [
+        json.loads(line)
+        for line in (config.paths.logs_dir / f"{config.run_id}.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    events = [record["event"] for record in log_records]
+    frequency_events = [
+        {key: value for key, value in record.items() if key != "timestamp"}
+        for record in log_records
+        if record["event"].startswith("name_frequency_")
+    ]
+
+    assert first.matches_written == 0
+    assert second.matches_written == 0
+    assert second.partitions_skipped == 1
+    assert artifact_path.is_file()
+    assert manifest["configuration"]["country_name"] == "Monaco"
+    assert manifest["configuration"]["require_text_name"] is True
+    assert manifest["configuration"]["name_frequency_artifact_sha256"]
+    assert "name_frequency_started" in events
+    assert "name_frequency_skipped" in events
+    assert frequency_events == [
+        {"event": "name_frequency_started", "profiles": 1},
+        {
+            "event": "name_frequency_complete",
+            "documents_scanned": 2,
+            "profiles": 1,
+            "retained_profiles": 0,
+            "threshold": 0,
+        },
+        {
+            "event": "name_frequency_skipped",
+            "documents_scanned": 2,
+            "profiles": 1,
+        },
+    ]
+
+
+def test_v5_retains_a_specific_name_and_records_the_full_contract(
+    tmp_path: Path,
+) -> None:
+    config, shard = make_config(tmp_path)
+    texts = ["Rare Place in Monaco."] + ["No match."] * 1000
+    pq.write_table(
+        pa.table(
+            {
+                "id": [f"doc-{index}" for index in range(len(texts))],
+                "text": texts,
+                "url": ["https://example.test/unrelated"] * len(texts),
+            }
+        ),
+        shard,
+    )
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v5-retained",
+        retrieval_version="v5",
+        country_name="Monaco",
+    )
+    profiles = (
+        PolygonProfile.create("relation/1", "Monaco"),
+        PolygonProfile.create("way/2", "Rare Place"),
+    )
+
+    summary = execute_run(config, profiles=profiles)
+    manifest = json.loads(summary.manifest_path.read_text(encoding="utf-8"))
+    artifact_path = config.paths.runs_dir / config.run_id / "name-frequency.json"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    records = [
+        json.loads(line)
+        for line in summary.result_path.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert summary.matches_written == 1
+    assert manifest["polygon_counts"] == {
+        "filtered": 1,
+        "named": 1,
+        "unnamed": 0,
+    }
+    assert manifest["configuration"] == {
+        "base_polygon_profile_count": 2,
+        "batch_size": 8192,
+        "country_name": "Monaco",
+        "deduplicate_documents": True,
+        "fineweb_document_frequency_ratio": 0.001,
+        "fineweb_document_frequency_threshold": 1,
+        "matcher_version": "v5-exact-specific-name-and-country-in-text",
+        "name_frequency_artifact": str(artifact_path),
+        "name_frequency_artifact_sha256": _sha256_file(artifact_path),
+        "name_specificity_rule": (
+            "keep OSM-unique names at or below the FineWeb 0.1% "
+            "document-frequency cutoff; use the country name as context only"
+        ),
+        "normalization_version": "v1-nfkc-casefold-separators",
+        "polygon_profile_version": "v5-specific-meaningful-polygon-areas",
+        "require_text_name": True,
+        "require_url_name": False,
+        "retrieval_definition": get_retrieval_definition("v5").to_record(),
+        "retrieval_version": "v5",
+        "row_groups_per_partition": 32,
+    }
+    assert artifact["documents_scanned"] == 1001
+    assert artifact["fineweb_document_frequency_threshold"] == 1
+    assert artifact["schema_version"] == 1
+    assert artifact["shard_sha256"] == _sha256_file(shard)
+    assert artifact["country_name"] == "Monaco"
+    assert artifact["batch_size"] == 8192
+    assert artifact["fineweb_document_frequency_ratio"] == 0.001
+    assert artifact["base_polygon_profile_sha256"] == _sha256_payload(
+        artifact["profiles"]
+    )
+    assert artifact["profiles"] == [
+        {
+            "polygon_id": "relation/1",
+            "name": "Monaco",
+            "normalized_name": "monaco",
+            "osm_occurrences": 1,
+        },
+        {
+            "polygon_id": "way/2",
+            "name": "Rare Place",
+            "normalized_name": "rare place",
+            "osm_occurrences": 1,
+        },
+    ]
+    assert artifact["frequencies"] == [
+        {
+            "normalized_name": "monaco",
+            "osm_occurrences": 1,
+            "fineweb_document_frequency": 1,
+        },
+        {
+            "normalized_name": "rare place",
+            "osm_occurrences": 1,
+            "fineweb_document_frequency": 1,
+        },
+    ]
+    assert records[0]["polygon_name"] == "Rare Place"
+    assert records[0]["text"] == "Rare Place in Monaco."
+
+
+def test_v5_matcher_wiring_passes_all_requirements_and_country(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, _ = make_config(tmp_path)
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v5-wiring",
+        retrieval_version="v5",
+        country_name="Liechtenstein",
+    )
+    definition = get_retrieval_definition("v5")
+    captured: dict[str, object] = {}
+
+    def fake_matcher(profiles, **kwargs):
+        captured["profiles"] = profiles
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(runs_module, "EvidenceMatcher", fake_matcher)
+    profiles = (PolygonProfile.create("way/1", "Vaduz"),)
+
+    matcher = runs_module._matcher_for_run(config, definition, profiles)
+
+    assert matcher is not None
+    assert captured == {
+        "profiles": profiles,
+        "require_text_context": True,
+        "require_text_name": True,
+        "require_url_name": False,
+        "context_name": "Liechtenstein",
+    }
+
+
+def test_v6_matcher_wiring_adds_the_500_character_distance_limit(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, _ = make_config(tmp_path)
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v6-wiring",
+        retrieval_version="v6",
+        country_name="Liechtenstein",
+    )
+    definition = get_retrieval_definition("v6")
+    captured: dict[str, object] = {}
+
+    def fake_matcher(profiles, **kwargs):
+        captured["profiles"] = profiles
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(runs_module, "EvidenceMatcher", fake_matcher)
+    profiles = (PolygonProfile.create("way/1", "Vaduz"),)
+
+    matcher = runs_module._matcher_for_run(config, definition, profiles)
+
+    assert matcher is not None
+    assert captured == {
+        "profiles": profiles,
+        "require_text_context": True,
+        "require_text_name": True,
+        "require_url_name": False,
+        "context_name": "Liechtenstein",
+        "max_name_country_distance": 500,
+    }
+
+
+def test_v6_manifest_configuration_records_the_500_character_limit(
+    tmp_path: Path,
+) -> None:
+    config, _ = make_config(tmp_path)
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v6-config",
+        retrieval_version="v6",
+        country_name="Monaco",
+    )
+    profile_data = runs_module._ProfileRunData(
+        profiles=(PolygonProfile.create("way/1", "Fontvieille"),),
+        named_count=1,
+        unnamed_count=0,
+        filtered_count=0,
+        name_occurrences={"fontvieille": 1},
+        frequency_result=SpecificityResult((), (), 1),
+        frequency_artifact_sha256="sha256",
+    )
+
+    configuration = runs_module._run_configuration(
+        config=config,
+        definition=get_retrieval_definition("v6"),
+        layout=runs_module._RunLayout.from_config(config),
+        profile_data=profile_data,
+    )
+
+    assert configuration["max_name_country_distance"] == 500
+    assert "XXmax_name_country_distanceXX" not in configuration
+
+
+def test_v5_frequency_helpers_preserve_metadata_records_and_validation(
+    tmp_path: Path,
+) -> None:
+    config, _ = make_config(tmp_path)
+    layout = _RunLayout.from_config(config)
+    profile = PolygonProfile.create("way/1", "Rare Place")
+    profiles = (profile,)
+    frequency = NameFrequency("rare place", 3, 7)
+    result = SpecificityResult(profiles, (frequency,), documents_scanned=1001)
+    profile_data = runs_module._ProfileRunData(
+        profiles=profiles,
+        named_count=1,
+        unnamed_count=2,
+        filtered_count=4,
+        name_occurrences={"rare place": 3},
+        frequency_result=result,
+        frequency_artifact_sha256="artifact-sha",
+    )
+
+    configuration = runs_module._specificity_configuration(config, layout, profile_data)
+    metadata = runs_module._frequency_metadata(
+        profiles=profiles,
+        osm_name_occurrences={"rare place": 3},
+        source_shard_sha256="shard-sha",
+        country_name="Monaco",
+        batch_size=16,
+    )
+
+    assert configuration["base_polygon_profile_count"] == 1
+    assert configuration["fineweb_document_frequency_threshold"] == 1
+    assert configuration["name_frequency_artifact"] == str(layout.name_frequency_path)
+    assert metadata == {
+        "schema_version": 1,
+        "shard_sha256": "shard-sha",
+        "base_polygon_profile_sha256": _sha256_payload(
+            [
+                {
+                    "polygon_id": "way/1",
+                    "name": "Rare Place",
+                    "normalized_name": "rare place",
+                    "osm_occurrences": 3,
+                }
+            ]
+        ),
+        "country_name": "Monaco",
+        "batch_size": 16,
+        "fineweb_document_frequency_ratio": 0.001,
+        "profiles": [
+            {
+                "polygon_id": "way/1",
+                "name": "Rare Place",
+                "normalized_name": "rare place",
+                "osm_occurrences": 3,
+            }
+        ],
+    }
+
+    for incomplete_result, incomplete_sha in ((None, "sha"), (result, None)):
+        with pytest.raises(
+            ValueError,
+            match=r"\AV5 profile data is missing its frequency artifact\Z",
+        ):
+            runs_module._specificity_configuration(
+                config,
+                layout,
+                runs_module._ProfileRunData(
+                    profiles=profiles,
+                    named_count=1,
+                    unnamed_count=0,
+                    filtered_count=0,
+                    name_occurrences={"rare place": 1},
+                    frequency_result=incomplete_result,
+                    frequency_artifact_sha256=incomplete_sha,
+                ),
+            )
+
+
+def test_v5_helper_boundaries_and_record_conversions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, shard = make_config(tmp_path)
+    layout = _RunLayout.from_config(config)
+    profile = PolygonProfile.create("way/1", "Rare Place")
+
+    assert runs_module._selection_occurrences(
+        (profile, 1, 2, 3, (("rare place", 4),))
+    ) == {"rare place": 4}
+    assert runs_module._selection_occurrences((profile, 1, 2, 3)) == {}
+    assert runs_module._select_profiles(
+        shard,
+        (profile,),
+        retrieval_version="v5",
+        include_name_occurrences=True,
+    )[4] == (("rare place", 1),)
+    assert runs_module._frequency_records((profile,), {}, {}) == (
+        NameFrequency("rare place", 1, 0),
+    )
+    assert runs_module._frequency_records((profile,), {"rare place": 7}, {}) == (
+        NameFrequency("rare place", 7, 0),
+    )
+    assert runs_module._frequency_records_from_artifact(
+        {
+            "frequencies": [
+                {
+                    "normalized_name": "rare place",
+                    "osm_occurrences": 3,
+                    "fineweb_document_frequency": 7,
+                }
+            ]
+        }
+    ) == (NameFrequency("rare place", 3, 7),)
+    assert runs_module._frequency_metadata(
+        profiles=(profile,),
+        osm_name_occurrences={},
+        source_shard_sha256="shard-sha",
+        country_name="Monaco",
+        batch_size=16,
+    )["profiles"] == [
+        {
+            "polygon_id": "way/1",
+            "name": "Rare Place",
+            "normalized_name": "rare place",
+            "osm_occurrences": 1,
+        }
+    ]
+
+    artifact_path = layout.run_dir / "frequency.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "documents_scanned": 0,
+                "fineweb_document_frequency_threshold": 0,
+                "frequencies": [
+                    {
+                        "normalized_name": "monaco",
+                        "osm_occurrences": 1,
+                        "fineweb_document_frequency": 0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    read_calls: list[object] = []
+    real_read_text = Path.read_text
+
+    def read_text(self, *args, **kwargs):
+        if self == artifact_path:
+            read_calls.append(kwargs.get("encoding"))
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    read_result = runs_module._read_frequency_result(
+        artifact_path,
+        (PolygonProfile.create("relation/1", "Monaco"),),
+        {},
+        country_name="Monaco",
+    )
+    assert read_result.profiles == ()
+    assert read_calls == ["utf-8"]
+
+    assert layout.name_frequency_path is not None
+    layout.name_frequency_path.write_text("{}", encoding="utf-8")
+    reader_calls: list[object] = []
+
+    def fake_frequency_reader(*args, country_name):
+        del args
+        reader_calls.append(country_name)
+        return SpecificityResult((), (), documents_scanned=0)
+
+    monkeypatch.setattr(runs_module, "_read_frequency_result", fake_frequency_reader)
+    runs_module._load_or_build_frequency_artifact(
+        layout=layout,
+        shard_path=shard,
+        profiles=(profile,),
+        osm_name_occurrences={},
+        source_shard_sha256="shard-sha",
+        country_name="Liechtenstein",
+        batch_size=16,
+    )
+    assert reader_calls == ["Liechtenstein"]
+
+    with pytest.raises(
+        ValueError, match=r"\AV5 runs require a name-frequency artifact path\Z"
+    ):
+        runs_module._frequency_path(
+            _RunLayout(
+                run_dir=layout.run_dir,
+                partitions_dir=layout.partitions_dir,
+                manifest_path=layout.manifest_path,
+                result_path=layout.result_path,
+                log_path=layout.log_path,
+                name_frequency_path=None,
+            )
+        )
+    with pytest.raises(
+        ValueError,
+        match=r"\AName-frequency artifact fingerprint conflict in country_name\Z",
+    ):
+        runs_module._validate_frequency_metadata(
+            {"country_name": "Monaco"}, {"country_name": "Liechtenstein"}
+        )
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"\AName-frequency artifact has an invalid document-frequency threshold\Z"
+        ),
+    ):
+        runs_module._validate_frequency_threshold(0, 1001)
+
+
+def test_prepare_profile_data_passes_v5_selection_and_frequency_inputs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, shard = make_config(tmp_path)
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v5-profile-data",
+        retrieval_version="v5",
+        country_name="Liechtenstein",
+    )
+    layout = _RunLayout.from_config(config)
+    profile = PolygonProfile.create("way/1", "Vaduz")
+    definition = get_retrieval_definition("v5")
+    selected = (profile,)
+    selection = (selected, 9, 8, 7, (("vaduz", 4),))
+    captured: dict[str, object] = {}
+    frequency_result = SpecificityResult(
+        profiles=selected,
+        frequencies=(NameFrequency("vaduz", 4, 1),),
+        documents_scanned=1001,
+    )
+
+    def fake_select(
+        pbf_path, profiles, *, retrieval_version, include_name_occurrences=False
+    ):
+        captured["select"] = (
+            pbf_path,
+            profiles,
+            retrieval_version,
+            include_name_occurrences,
+        )
+        return selection
+
+    def fake_frequency(**kwargs):
+        captured["frequency"] = kwargs
+        return frequency_result, "artifact-sha"
+
+    monkeypatch.setattr(runs_module, "_select_profiles", fake_select)
+    monkeypatch.setattr(
+        runs_module, "_load_or_build_frequency_artifact", fake_frequency
+    )
+
+    data = runs_module._prepare_profile_data(
+        config=config,
+        definition=definition,
+        layout=layout,
+        pbf_path=config.pbf_path,
+        shard_path=shard,
+        profiles=None,
+        source_shard_sha256="shard-sha",
+    )
+
+    assert captured["select"] == (
+        config.pbf_path,
+        None,
+        "v5",
+        True,
+    )
+    assert captured["frequency"] == {
+        "layout": layout,
+        "shard_path": shard,
+        "profiles": selected,
+        "osm_name_occurrences": {"vaduz": 4},
+        "source_shard_sha256": "shard-sha",
+        "country_name": "Liechtenstein",
+        "batch_size": 8192,
+    }
+    assert data == runs_module._ProfileRunData(
+        profiles=selected,
+        named_count=1,
+        unnamed_count=8,
+        filtered_count=7,
+        name_occurrences={"vaduz": 4},
+        frequency_result=frequency_result,
+        frequency_artifact_sha256="artifact-sha",
+    )
+
+    empty_selection = (selected, 9, 8, 7)
+
+    def fake_empty_select(*args, **kwargs):
+        del args, kwargs
+        return empty_selection
+
+    monkeypatch.setattr(runs_module, "_select_profiles", fake_empty_select)
+    runs_module._prepare_profile_data(
+        config=config,
+        definition=definition,
+        layout=layout,
+        pbf_path=config.pbf_path,
+        shard_path=shard,
+        profiles=None,
+        source_shard_sha256="shard-sha",
+    )
+    frequency_kwargs = cast(dict[str, object], captured["frequency"])
+    assert frequency_kwargs["osm_name_occurrences"] == {"vaduz": 1}
+
+
+def test_select_profiles_includes_reader_name_occurrences(
+    tmp_path: Path, monkeypatch
+) -> None:
+    profile = PolygonProfile.create("way/1", "Vaduz")
+    expected = PolygonReadResult(
+        profiles=(profile,),
+        named_count=1,
+        unnamed_count=2,
+        filtered_count=3,
+        name_occurrences=(("vaduz", 4),),
+    )
+    monkeypatch.setattr(runs_module, "read_v3_polygon_profiles", lambda _: expected)
+
+    result = _select_profiles(
+        tmp_path / "liechtenstein.osm.pbf",
+        None,
+        retrieval_version="v5",
+        include_name_occurrences=True,
+    )
+
+    assert result == (
+        expected.profiles,
+        expected.named_count,
+        expected.unnamed_count,
+        expected.filtered_count,
+        expected.name_occurrences,
+    )
+
+
+def test_build_frequency_result_forwards_batch_size_and_country(
+    tmp_path: Path, monkeypatch
+) -> None:
+    profile = PolygonProfile.create("way/1", "Rare Place")
+    country = PolygonProfile.create("relation/2", "Liechtenstein")
+    calls: dict[str, object] = {}
+
+    def fake_counter(shard_path, profiles, *, batch_size):
+        calls["args"] = (shard_path, profiles, batch_size)
+        return {"rare place": 1, "liechtenstein": 1}, 1001
+
+    monkeypatch.setattr(runs_module, "count_fineweb_document_frequencies", fake_counter)
+    result, artifact = runs_module._build_frequency_result(
+        shard_path=tmp_path / "shard.parquet",
+        profiles=(profile, country),
+        osm_name_occurrences={},
+        country_name="Liechtenstein",
+        batch_size=16,
+        metadata={"metadata": True},
+    )
+
+    assert calls["args"] == (
+        tmp_path / "shard.parquet",
+        (profile, country),
+        16,
+    )
+    assert result.profiles == (profile,)
+    assert artifact["documents_scanned"] == 1001
+    assert artifact["fineweb_document_frequency_threshold"] == 1
+
+
 def test_execute_run_passes_raw_profile_inputs_and_v2_context_requirement(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -466,7 +1115,25 @@ def test_select_profiles_uses_the_requested_raw_pbf_reader(
         5,
         6,
     )
-    assert calls == [("v1", pbf), ("v2", pbf), ("v3", pbf)]
+    assert _select_profiles(pbf, None, retrieval_version="v5") == (
+        expected.profiles,
+        4,
+        5,
+        6,
+    )
+    assert _select_profiles(pbf, None, retrieval_version="v6") == (
+        expected.profiles,
+        4,
+        5,
+        6,
+    )
+    assert calls == [
+        ("v1", pbf),
+        ("v2", pbf),
+        ("v3", pbf),
+        ("v3", pbf),
+        ("v3", pbf),
+    ]
 
 
 def test_select_profiles_with_explicit_profiles_has_zero_source_counts(

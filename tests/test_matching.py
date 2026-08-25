@@ -1,12 +1,20 @@
+import inspect
 from typing import cast
+
+import pytest
 
 from fineweb_polygons.matching import (
     EvidenceMatcher,
+    _closest_span_pair,
     _context_candidates,
     _excerpt,
     _find_context,
     _find_names,
     _MultiPatternMatcher,
+    _normalized_sentence_ranges,
+    _sentence_for_span,
+    _span_distance,
+    _v6_text_spans,
 )
 from fineweb_polygons.models import FineWebDocument, PolygonProfile
 
@@ -102,6 +110,59 @@ def test_name_helper_decodes_urls_but_not_text() -> None:
     }
 
 
+def test_span_helper_decodes_urls_only_when_requested() -> None:
+    matcher = _MultiPatternMatcher(("monaco",))
+
+    assert matcher.find_spans("mon%61co", decode_url=False) == {}
+    assert matcher.find_spans("mon%61co", decode_url=True) == {"monaco": ((0, 6),)}
+    assert matcher.find_spans("mon%61co") == {"monaco": ((0, 6),)}
+
+
+def test_v6_text_span_helper_passes_false_url_decoding_to_both_matchers() -> None:
+    class FakeMatcher:
+        def __init__(self) -> None:
+            self.decode_flags: list[bool] = []
+
+        def find_spans(
+            self, value: str, *, decode_url: bool = True
+        ) -> dict[str, tuple[tuple[int, int], ...]]:
+            del value
+            self.decode_flags.append(decode_url)
+            return {}
+
+    name_matcher = FakeMatcher()
+    context_matcher = FakeMatcher()
+
+    assert _v6_text_spans(
+        "text",
+        cast(_MultiPatternMatcher, name_matcher),
+        cast(_MultiPatternMatcher, context_matcher),
+    ) == ({}, {})
+    assert name_matcher.decode_flags == [False]
+    assert context_matcher.decode_flags == [False]
+
+
+def test_v6_keeps_url_matches_as_metadata_only() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+
+    evidence = matcher.match(
+        FineWebDocument(
+            26,
+            "doc-26",
+            "Fontvieille is in Monaco.",
+            "https://example.test/fontv%69eille/Mon%61co",
+        )
+    )[0]
+
+    assert evidence.matched_fields == ("text", "url")
+    assert evidence.context_fields == ("text", "url")
+
+
 def test_context_marker_without_an_accepted_phrase_is_not_high_confidence() -> None:
     matcher = EvidenceMatcher([PolygonProfile.create("way/1", "Fontvieille")])
     document = FineWebDocument(8, None, "Fontvieille near Monacology.", "")
@@ -183,6 +244,10 @@ def test_multi_pattern_matcher_can_skip_url_decoding() -> None:
     assert (
         matcher.find("https://example.test/caf%C3%A9", decode_url=False) == frozenset()
     )
+
+
+def test_multi_pattern_matcher_accepts_no_patterns() -> None:
+    assert _MultiPatternMatcher([]).find("anything") == frozenset()
 
 
 def test_matcher_orders_profiles_with_the_same_normalized_name() -> None:
@@ -380,6 +445,22 @@ def test_v4_rejects_polygon_name_without_text_context() -> None:
     assert matcher.match(document) == ()
 
 
+def test_v4_ignores_a_monaco_substring_without_raising() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Building")],
+        require_text_context=True,
+        require_text_name=True,
+    )
+    document = FineWebDocument(
+        24,
+        "doc-24",
+        "Building was mentioned in monacobuilding.",
+        "",
+    )
+
+    assert matcher.match(document) == ()
+
+
 def test_v4_chooses_the_longest_text_context_phrase(monkeypatch) -> None:
     matcher = EvidenceMatcher(
         [PolygonProfile.create("way/1", "Fontvieille")],
@@ -398,13 +479,297 @@ def test_v4_chooses_the_longest_text_context_phrase(monkeypatch) -> None:
         cast(_MultiPatternMatcher, FakeContextMatcher()),
     )
     document = FineWebDocument(
-        24,
-        "doc-24",
+        25,
+        "doc-25",
         "Fontvieille Monaco.",
         "https://example.test/unrelated-article",
     )
 
     assert matcher.match(document)[0].context_phrase == "long phrase"
+
+
+def test_v5_uses_the_configured_country_name_as_text_context() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Vaduz")],
+        require_text_context=True,
+        require_text_name=True,
+        context_name="Liechtenstein",
+    )
+
+    evidence = matcher.match(
+        FineWebDocument(
+            40,
+            "doc-40",
+            "Vaduz is the capital of Liechtenstein.",
+            "https://example.test/unrelated",
+        )
+    )[0]
+
+    assert evidence.context_phrase == "liechtenstein"
+    assert evidence.matched_fields == ("text",)
+    assert evidence.context_fields == ("text",)
+
+
+def test_v5_does_not_accept_monaco_as_liechtenstein_context() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Vaduz")],
+        require_text_context=True,
+        require_text_name=True,
+        context_name="Liechtenstein",
+    )
+
+    assert matcher.match(FineWebDocument(41, "doc-41", "Vaduz is in Monaco.", "")) == ()
+
+
+def test_v6_accepts_an_inclusive_500_character_normalized_text_gap() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+    document = FineWebDocument(
+        43,
+        "doc-43",
+        f"Fontvieille {'x' * 498} Monaco",
+        "https://example.test/unrelated",
+    )
+
+    evidence = matcher.match(document)[0]
+
+    assert evidence.matched_fields == ("text",)
+    assert evidence.context_fields == ("text",)
+    assert evidence.name_country_distance == 500
+    assert evidence.to_record()["name_country_distance"] == 500
+
+
+def test_v6_rejects_a_501_character_normalized_text_gap() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+    document = FineWebDocument(
+        44,
+        "doc-44",
+        f"Fontvieille {'x' * 499} Monaco",
+        "https://example.test/fontvieille",
+    )
+
+    assert matcher.match(document) == ()
+
+
+def test_v6_distance_uses_casefolded_separator_normalized_text() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Font Vieille")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+
+    evidence = matcher.match(
+        FineWebDocument(45, "doc-45", "FONT-VIEILLE is in MONACO.", "")
+    )[0]
+
+    assert evidence.name_country_distance == 7
+
+
+def test_v6_accepts_a_zero_distance_limit() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Monaco Telecom")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=0,
+    )
+
+    assert matcher.match(FineWebDocument(45, "doc-45", "Monaco Telecom", ""))
+
+
+def test_v6_overlapping_name_and_country_spans_have_zero_distance() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Monaco Telecom")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+
+    evidence = matcher.match(FineWebDocument(46, "doc-46", "Monaco Telecom", ""))[0]
+
+    assert evidence.name_country_distance == 0
+
+
+def test_v6_serializes_the_original_sentences_without_excerpt_fields() -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_context=True,
+        require_text_name=True,
+        max_name_country_distance=500,
+    )
+    text = "Fontvieille is a district. Monaco is the country context."
+
+    record = matcher.match(FineWebDocument(47, "doc-47", text, ""))[0].to_record()
+
+    assert record["text"] == text
+    assert record["polygon_name_sentence"] == "Fontvieille is a district."
+    assert record["country_name_sentence"] == "Monaco is the country context."
+    assert record["context_phrase"] == "monaco"
+    assert "text_excerpt" not in record
+    assert "url_excerpt" not in record
+
+
+def test_v6_rejects_a_negative_distance_limit() -> None:
+    with pytest.raises(
+        ValueError, match=r"\Amax_name_country_distance must be non-negative\Z"
+    ):
+        EvidenceMatcher([], max_name_country_distance=-1)
+
+
+def test_span_distance_handles_both_directions_and_overlap() -> None:
+    assert _span_distance((0, 10), (5, 12)) == 0
+    assert _span_distance((5, 7), (1, 3)) == 2
+    assert _span_distance((1, 3), (5, 7)) == 2
+
+
+def test_closest_span_pair_prefers_the_smallest_distance() -> None:
+    assert _closest_span_pair(((0, 3), (20, 23)), ((8, 10), (30, 32))) == (
+        5,
+        ((0, 3), (8, 10)),
+    )
+
+
+def test_closest_span_pair_uses_lexical_order_for_equal_distances() -> None:
+    assert _closest_span_pair(((10, 12), (0, 2)), ((5, 7),)) == (
+        3,
+        ((0, 2), (5, 7)),
+    )
+
+
+def test_normalized_sentence_ranges_keep_exact_normalized_offsets() -> None:
+    assert _normalized_sentence_ranges("One. Monaco here.") == (
+        (0, 3, "One."),
+        (4, 15, "Monaco here."),
+    )
+
+
+def test_normalized_sentence_ranges_skip_empty_sentences_and_continue() -> None:
+    assert _normalized_sentence_ranges("...\nMonaco.") == ((0, 6, "Monaco."),)
+
+
+def test_sentence_for_span_uses_the_start_of_a_half_open_span() -> None:
+    ranges = ((0, 4, "first"), (4, 8, "second"))
+
+    assert _sentence_for_span(ranges, (3, 6)) == "first"
+    assert _sentence_for_span(ranges, (4, 5)) == "second"
+    assert _sentence_for_span(ranges, (9, 10)) == ""
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"require_text_context": True},
+        {"require_text_context": True, "require_url_name": True},
+    ],
+)
+def test_configured_context_reaches_every_matching_version(options) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Vaduz")],
+        context_name="Liechtenstein",
+        **options,
+    )
+    document = FineWebDocument(
+        42,
+        "doc-42",
+        "Vaduz is in Liechtenstein.",
+        "https://example.test/vaduz",
+    )
+
+    assert len(matcher.match(document)) == 1
+
+
+def test_matcher_rejects_an_empty_context_name_with_a_stable_message() -> None:
+    with pytest.raises(ValueError, match=r"\Acontext_name must not be empty\Z"):
+        EvidenceMatcher([], context_name=" ")
+
+
+def test_matcher_normalizes_the_default_context_name_without_url_decoding(
+    monkeypatch,
+) -> None:
+    calls: list[tuple[object, bool]] = []
+
+    def fake_normalize(value: object, *, decode_url: bool = True) -> str:
+        calls.append((value, decode_url))
+        return "monaco"
+
+    monkeypatch.setattr(
+        "fineweb_polygons.matching.normalize_for_search", fake_normalize
+    )
+
+    EvidenceMatcher([])
+
+    assert calls == [("Monaco", False)]
+
+
+def test_v2_passes_the_configured_context_to_its_context_helper(monkeypatch) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Vaduz")],
+        require_text_context=True,
+        context_name="Liechtenstein",
+    )
+    captured: dict[str, object] = {}
+    real_find_context = _find_context
+
+    def fake_find_context(values, context_matcher, *, context_name="Monaco"):
+        captured["context_name"] = context_name
+        return real_find_context(values, context_matcher, context_name=context_name)
+
+    monkeypatch.setattr("fineweb_polygons.matching._find_context", fake_find_context)
+
+    assert matcher.match(
+        FineWebDocument(43, "doc-43", "Vaduz is in Liechtenstein.", "")
+    )
+    assert captured["context_name"] == "liechtenstein"
+
+
+def test_context_helpers_pass_their_canonical_default_to_nested_calls(
+    monkeypatch,
+) -> None:
+    context_calls: list[object] = []
+
+    def fake_candidates(values, *, context_name="Monaco"):
+        del values
+        context_calls.append(context_name)
+        return ()
+
+    monkeypatch.setattr(
+        "fineweb_polygons.matching._context_candidates", fake_candidates
+    )
+    _find_context({"text": "", "url": ""}, _MultiPatternMatcher(()))
+    assert context_calls == ["Monaco"]
+
+    marker_calls: list[object] = []
+
+    def fake_marker(value, context_name, *, decode_url):
+        del value, decode_url
+        marker_calls.append(context_name)
+        return False
+
+    monkeypatch.setattr("fineweb_polygons.matching.has_context_marker", fake_marker)
+    _context_candidates({"text": "", "url": ""})
+    assert marker_calls == ["Monaco", "Monaco"]
+
+
+def test_context_defaults_are_stable_public_defaults() -> None:
+    assert inspect.signature(EvidenceMatcher).parameters["context_name"].default == (
+        "Monaco"
+    )
+    assert inspect.signature(_find_context).parameters["context_name"].default == (
+        "Monaco"
+    )
+    assert inspect.signature(_context_candidates).parameters[
+        "context_name"
+    ].default == ("Monaco")
 
 
 def test_excerpt_keeps_the_exact_boundary_length() -> None:

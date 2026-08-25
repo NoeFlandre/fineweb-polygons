@@ -127,6 +127,7 @@ def test_v3_keeps_meaningful_names_and_deduplicates_normalized_names(
     assert result.named_count == 1
     assert result.unnamed_count == 0
     assert result.filtered_count == 4
+    assert result.name_occurrences == (("palais", 2),)
 
 
 class _FakeArea:
@@ -152,9 +153,11 @@ def test_v3_area_selection_distinguishes_non_areas_and_unnamed_areas(
 def test_v3_area_reader_counts_all_unnamed_areas_and_continues(
     monkeypatch,
 ) -> None:
+    paths: list[str] = []
+
     class _FakeProcessor:
         def __init__(self, path: str) -> None:
-            del path
+            paths.append(path)
 
         def with_locations(self) -> "_FakeProcessor":
             return self
@@ -179,3 +182,4 @@ def test_v3_area_reader_counts_all_unnamed_areas_and_continues(
     assert profiles == [PolygonProfile.create("way/9", "Palais")]
     assert named_count == 1
     assert unnamed_count == 2
+    assert paths == ["mini.osm.pbf"]

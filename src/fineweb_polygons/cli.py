@@ -38,9 +38,10 @@ def _build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--shard", type=Path, required=True)
     scan.add_argument("--run-id", default="v1-10bt-000-v2")
     scan.add_argument("--batch-size", type=int, default=8192)
+    scan.add_argument("--country-name", default="Monaco")
     scan.add_argument(
         "--retrieval-version",
-        choices=("v1", "v2", "v3", "v4"),
+        choices=("v1", "v2", "v3", "v4", "v5", "v6"),
         default="v1",
     )
     return parser
@@ -62,6 +63,7 @@ def _run_scan(parsed: argparse.Namespace, runner: Runner) -> int:
         run_id=parsed.run_id,
         batch_size=parsed.batch_size,
         retrieval_version=parsed.retrieval_version,
+        country_name=parsed.country_name,
     )
     try:
         summary = runner(config)

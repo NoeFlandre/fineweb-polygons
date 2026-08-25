@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import pyarrow.parquet as pq
 
@@ -30,6 +30,14 @@ from fineweb_polygons.polygons import (
     read_v3_polygon_profiles,
 )
 from fineweb_polygons.scanning import ScanStats, scan_row_groups
+from fineweb_polygons.specificity import (
+    FINEWEB_DOCUMENT_FREQUENCY_RATIO,
+    NameFrequency,
+    SpecificityResult,
+    count_fineweb_document_frequencies,
+    filter_specific_profiles,
+    frequency_threshold,
+)
 from fineweb_polygons.versions import get_retrieval_definition
 
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -48,6 +56,7 @@ class ScanRunConfig:
     batch_size: int = 8192
     row_groups_per_partition: int = _DEFAULT_ROW_GROUPS_PER_PARTITION
     retrieval_version: str = "v1"
+    country_name: str = "Monaco"
 
     def __post_init__(self) -> None:
         if not _RUN_ID_RE.fullmatch(self.run_id):
@@ -59,6 +68,8 @@ class ScanRunConfig:
             raise ValueError("batch_size must be positive")
         if self.row_groups_per_partition < 1:
             raise ValueError("row_groups_per_partition must be positive")
+        if not self.country_name.strip():
+            raise ValueError("country_name must not be empty")
         get_retrieval_definition(self.retrieval_version)
 
 
@@ -114,6 +125,7 @@ class _RunLayout:
     manifest_path: Path
     result_path: Path
     log_path: Path
+    name_frequency_path: Path | None = None
 
     @classmethod
     def from_config(cls, config: ScanRunConfig) -> _RunLayout:
@@ -124,7 +136,21 @@ class _RunLayout:
             manifest_path=run_dir / "manifest.json",
             result_path=config.paths.artifacts_dir / f"{config.run_id}-matches.jsonl",
             log_path=config.paths.logs_dir / f"{config.run_id}.jsonl",
+            name_frequency_path=run_dir / "name-frequency.json",
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _ProfileRunData:
+    """Profiles and counters selected before a shard scan."""
+
+    profiles: tuple[PolygonProfile, ...]
+    named_count: int
+    unnamed_count: int
+    filtered_count: int
+    name_occurrences: Mapping[str, int]
+    frequency_result: SpecificityResult | None = None
+    frequency_artifact_sha256: str | None = None
 
 
 def execute_run(
@@ -137,6 +163,7 @@ def execute_run(
     layout = _RunLayout.from_config(config)
     layout.run_dir.mkdir(exist_ok=True)
     layout.partitions_dir.mkdir(exist_ok=True)
+    _log(layout.log_path, "run_started", run_id=config.run_id)
     row_groups = _inspect_row_groups(shard_path)
     partitions = _make_partitions(
         row_groups, groups_per_partition=config.row_groups_per_partition
@@ -146,49 +173,34 @@ def execute_run(
         "shard": {"path": str(shard_path), "sha256": _sha256_file(shard_path)},
     }
     definition = get_retrieval_definition(config.retrieval_version)
-    (
-        selected_profiles,
-        named_count,
-        unnamed_count,
-        filtered_count,
-    ) = _select_profiles(
-        pbf_path,
-        profiles,
-        retrieval_version=config.retrieval_version,
+    profile_data = _prepare_profile_data(
+        config=config,
+        definition=definition,
+        layout=layout,
+        pbf_path=pbf_path,
+        shard_path=shard_path,
+        profiles=profiles,
+        source_shard_sha256=str(source_fingerprints["shard"]["sha256"]),
     )
-
-    configuration = {
-        "batch_size": config.batch_size,
-        "deduplicate_documents": definition.deduplicate_documents,
-        "row_groups_per_partition": config.row_groups_per_partition,
-        "matcher_version": definition.matcher_version,
-        "normalization_version": NORMALIZATION_VERSION,
-        "polygon_profile_version": definition.polygon_profile_version,
-        "require_url_name": definition.requires_url_name,
-        "retrieval_version": config.retrieval_version,
-        "retrieval_definition": definition.to_record(),
-    }
-    if definition.requires_text_name:
-        configuration["require_text_name"] = True
+    configuration = _run_configuration(
+        config=config,
+        definition=definition,
+        layout=layout,
+        profile_data=profile_data,
+    )
     expected_manifest = _new_manifest(
         run_id=config.run_id,
         layout=layout,
         partitions=partitions,
         source_fingerprints=source_fingerprints,
-        profiles=selected_profiles,
+        profiles=profile_data.profiles,
         configuration=configuration,
-        named_count=named_count,
-        unnamed_count=unnamed_count,
-        filtered_count=filtered_count,
+        named_count=profile_data.named_count,
+        unnamed_count=profile_data.unnamed_count,
+        filtered_count=profile_data.filtered_count,
     )
     manifest = _load_or_create_manifest(layout.manifest_path, expected_manifest)
-    _log(layout.log_path, "run_started", run_id=config.run_id)
-    matcher = EvidenceMatcher(
-        selected_profiles,
-        require_text_context=definition.requires_text_context,
-        require_text_name=definition.requires_text_name,
-        require_url_name=definition.requires_url_name,
-    )
+    matcher = _matcher_for_run(config, definition, profile_data.profiles)
     started = perf_counter()
     counters = _process_partitions(
         config=config,
@@ -230,29 +242,405 @@ def _validated_inputs(config: ScanRunConfig) -> tuple[Path, Path]:
     return pbf_path, shard_path
 
 
+def _prepare_profile_data(
+    *,
+    config: ScanRunConfig,
+    definition: Any,
+    layout: _RunLayout,
+    pbf_path: Path,
+    shard_path: Path,
+    profiles: Sequence[PolygonProfile] | None,
+    source_shard_sha256: str,
+) -> _ProfileRunData:
+    include_occurrences = definition.requires_name_specificity
+    if include_occurrences:
+        selection = _select_profiles(
+            pbf_path,
+            profiles,
+            retrieval_version=config.retrieval_version,
+            include_name_occurrences=True,
+        )
+    else:
+        selection = _select_profiles(
+            pbf_path,
+            profiles,
+            retrieval_version=config.retrieval_version,
+        )
+    # pragma: no mutate start
+    selected_profiles = cast(tuple[PolygonProfile, ...], selection[0])
+    # pragma: no mutate end
+    name_occurrences = _selection_occurrences(selection)
+    # pragma: no mutate start
+    base_data = _ProfileRunData(
+        profiles=selected_profiles,
+        named_count=cast(int, selection[1]),  # pragma: no mutate
+        unnamed_count=cast(int, selection[2]),  # pragma: no mutate
+        filtered_count=cast(int, selection[3]),  # pragma: no mutate
+        name_occurrences=name_occurrences,
+    )
+    # pragma: no mutate end
+    if not include_occurrences:
+        return base_data
+    if not name_occurrences:
+        name_occurrences = {profile.normalized_name: 1 for profile in selected_profiles}
+    result, artifact_sha256 = _load_or_build_frequency_artifact(
+        layout=layout,
+        shard_path=shard_path,
+        profiles=selected_profiles,
+        osm_name_occurrences=name_occurrences,
+        source_shard_sha256=source_shard_sha256,
+        country_name=config.country_name,
+        batch_size=config.batch_size,
+    )
+    return _ProfileRunData(
+        profiles=result.profiles,
+        named_count=len(result.profiles),
+        unnamed_count=base_data.unnamed_count,
+        filtered_count=base_data.filtered_count + result.removed_count,
+        name_occurrences=name_occurrences,
+        frequency_result=result,
+        frequency_artifact_sha256=artifact_sha256,
+    )
+
+
+def _selection_occurrences(
+    selection: tuple[object, ...],
+) -> dict[str, int]:  # pragma: no mutate block
+    if len(selection) < 5:
+        return {}
+    raw = cast(  # pragma: no mutate
+        tuple[tuple[str, int], ...], selection[4]
+    )
+    return dict(raw)
+
+
+def _run_configuration(
+    *,
+    config: ScanRunConfig,
+    definition: Any,
+    layout: _RunLayout,
+    profile_data: _ProfileRunData,
+) -> dict[str, object]:
+    configuration: dict[str, object] = {
+        "batch_size": config.batch_size,
+        "deduplicate_documents": definition.deduplicate_documents,
+        "row_groups_per_partition": config.row_groups_per_partition,
+        "matcher_version": definition.matcher_version,
+        "normalization_version": NORMALIZATION_VERSION,
+        "polygon_profile_version": definition.polygon_profile_version,
+        "require_url_name": definition.requires_url_name,
+        "retrieval_version": config.retrieval_version,
+        "retrieval_definition": definition.to_record(),
+    }
+    if definition.requires_text_name:
+        configuration["require_text_name"] = True
+    if definition.max_name_country_distance is not None:
+        configuration["max_name_country_distance"] = (
+            definition.max_name_country_distance
+        )
+    if definition.requires_name_specificity:
+        configuration.update(_specificity_configuration(config, layout, profile_data))
+    return configuration
+
+
+def _specificity_configuration(
+    config: ScanRunConfig,
+    layout: _RunLayout,
+    profile_data: _ProfileRunData,
+) -> dict[str, object]:
+    result = profile_data.frequency_result
+    artifact_sha256 = profile_data.frequency_artifact_sha256
+    if result is None or artifact_sha256 is None:
+        raise ValueError("V5 profile data is missing its frequency artifact")
+    return {
+        "base_polygon_profile_count": len(profile_data.name_occurrences),
+        "country_name": config.country_name,
+        "fineweb_document_frequency_ratio": FINEWEB_DOCUMENT_FREQUENCY_RATIO,
+        "fineweb_document_frequency_threshold": frequency_threshold(
+            result.documents_scanned
+        ),
+        "name_frequency_artifact": str(layout.name_frequency_path),
+        "name_frequency_artifact_sha256": artifact_sha256,
+        "name_specificity_rule": (
+            "keep OSM-unique names at or below the FineWeb 0.1% "
+            "document-frequency cutoff; use the country name as context only"
+        ),
+    }
+
+
+def _matcher_for_run(
+    config: ScanRunConfig,
+    definition: Any,
+    profiles: Sequence[PolygonProfile],
+) -> EvidenceMatcher:
+    matcher_options: dict[str, Any] = {
+        "require_text_context": definition.requires_text_context,
+        "require_text_name": definition.requires_text_name,
+        "require_url_name": definition.requires_url_name,
+    }
+    if definition.requires_name_specificity:
+        matcher_options["context_name"] = config.country_name
+    if definition.max_name_country_distance is not None:
+        matcher_options["max_name_country_distance"] = (
+            definition.max_name_country_distance
+        )
+    return EvidenceMatcher(profiles, **matcher_options)
+
+
 def _select_profiles(
     pbf_path: Path,
     profiles: Sequence[PolygonProfile] | None,
     *,
     retrieval_version: str,
-) -> tuple[tuple[PolygonProfile, ...], int, int, int]:
+    include_name_occurrences: bool = False,
+) -> tuple[object, ...]:
     if profiles is None:
         readers = {
             "v1": read_named_polygon_profiles,
             "v2": read_v2_polygon_profiles,
             "v3": read_v3_polygon_profiles,
             "v4": read_v3_polygon_profiles,
+            "v5": read_v3_polygon_profiles,
+            "v6": read_v3_polygon_profiles,
         }
         reader = readers[retrieval_version]
         result = reader(pbf_path)
-        return (
+        selection: tuple[object, ...] = (
             result.profiles,
             result.named_count,
             result.unnamed_count,
             result.filtered_count,
         )
+        if include_name_occurrences:
+            selection += (result.name_occurrences,)
+        return selection
     selected = tuple(profiles)
-    return selected, len(selected), 0, 0
+    selection = (selected, len(selected), 0, 0)
+    if include_name_occurrences:
+        selection += (tuple((profile.normalized_name, 1) for profile in selected),)
+    return selection
+
+
+def _load_or_build_frequency_artifact(
+    *,
+    layout: _RunLayout,
+    shard_path: Path,
+    profiles: Sequence[PolygonProfile],
+    osm_name_occurrences: Mapping[str, int],
+    source_shard_sha256: str,
+    country_name: str,
+    batch_size: int,
+) -> tuple[SpecificityResult, str]:
+    """Load or create the resumable V5 name-frequency artifact."""
+    frequency_path = _frequency_path(layout)
+    metadata = _frequency_metadata(
+        profiles=profiles,
+        osm_name_occurrences=osm_name_occurrences,
+        source_shard_sha256=source_shard_sha256,
+        country_name=country_name,
+        batch_size=batch_size,
+    )
+    if frequency_path.exists():
+        result = _read_frequency_result(
+            frequency_path,
+            profiles,
+            metadata,
+            country_name=country_name,
+        )
+        _log(
+            layout.log_path,
+            "name_frequency_skipped",
+            documents_scanned=result.documents_scanned,
+            profiles=len(profiles),
+        )
+        return result, _sha256_file(frequency_path)
+
+    _log(layout.log_path, "name_frequency_started", profiles=len(profiles))
+    result, artifact = _build_frequency_result(
+        shard_path=shard_path,
+        profiles=profiles,
+        osm_name_occurrences=osm_name_occurrences,
+        country_name=country_name,
+        batch_size=batch_size,
+        metadata=metadata,
+    )
+    _atomic_json_write(frequency_path, artifact)
+    _log(
+        layout.log_path,
+        "name_frequency_complete",
+        documents_scanned=result.documents_scanned,
+        profiles=len(profiles),
+        retained_profiles=len(result.profiles),
+        threshold=frequency_threshold(result.documents_scanned),
+    )
+    return result, _sha256_file(frequency_path)
+
+
+def _frequency_path(layout: _RunLayout) -> Path:
+    if layout.name_frequency_path is None:
+        raise ValueError("V5 runs require a name-frequency artifact path")
+    return layout.name_frequency_path
+
+
+def _frequency_metadata(
+    *,
+    profiles: Sequence[PolygonProfile],
+    osm_name_occurrences: Mapping[str, int],
+    source_shard_sha256: str,
+    country_name: str,
+    batch_size: int,
+) -> dict[str, object]:
+    profile_records = [
+        {
+            "polygon_id": profile.polygon_id,
+            "name": profile.name,
+            "normalized_name": profile.normalized_name,
+            "osm_occurrences": int(
+                osm_name_occurrences.get(profile.normalized_name, 1)
+            ),
+        }
+        for profile in profiles
+    ]
+    return {
+        "schema_version": 1,
+        "shard_sha256": source_shard_sha256,
+        "base_polygon_profile_sha256": _sha256_payload(profile_records),
+        "country_name": country_name,
+        "batch_size": batch_size,
+        "fineweb_document_frequency_ratio": FINEWEB_DOCUMENT_FREQUENCY_RATIO,
+        "profiles": profile_records,
+    }
+
+
+def _read_frequency_result(
+    frequency_path: Path,
+    profiles: Sequence[PolygonProfile],
+    metadata: Mapping[str, object],
+    *,
+    country_name: str,
+) -> SpecificityResult:
+    artifact = json.loads(frequency_path.read_text(encoding="utf-8"))
+    _validate_frequency_metadata(artifact, metadata)
+    documents_scanned = int(artifact["documents_scanned"])
+    threshold = int(artifact["fineweb_document_frequency_threshold"])
+    _validate_frequency_threshold(threshold, documents_scanned)
+    records = _frequency_records_from_artifact(artifact)
+    return _apply_frequency_filter(
+        profiles,
+        records,
+        country_name=country_name,
+        threshold=threshold,
+        documents_scanned=documents_scanned,
+    )
+
+
+def _validate_frequency_metadata(
+    artifact: Mapping[str, object], metadata: Mapping[str, object]
+) -> None:
+    for key, expected in metadata.items():
+        if artifact.get(key) != expected:
+            raise ValueError(f"Name-frequency artifact fingerprint conflict in {key}")
+
+
+def _validate_frequency_threshold(threshold: int, documents_scanned: int) -> None:
+    if threshold != frequency_threshold(documents_scanned):
+        raise ValueError(
+            "Name-frequency artifact has an invalid document-frequency threshold"
+        )
+
+
+def _frequency_records_from_artifact(
+    artifact: Mapping[str, object],
+) -> tuple[NameFrequency, ...]:  # pragma: no mutate block
+    raw_records = cast(Sequence[Mapping[str, object]], artifact["frequencies"])
+    return tuple(
+        NameFrequency(
+            normalized_name=str(record["normalized_name"]),
+            osm_occurrences=int(  # pragma: no mutate
+                cast(int, record["osm_occurrences"])
+            ),
+            fineweb_document_frequency=int(
+                cast(  # pragma: no mutate
+                    int, record["fineweb_document_frequency"]
+                )
+            ),
+        )
+        for record in raw_records
+    )
+
+
+def _build_frequency_result(
+    *,
+    shard_path: Path,
+    profiles: Sequence[PolygonProfile],
+    osm_name_occurrences: Mapping[str, int],
+    country_name: str,
+    batch_size: int,
+    metadata: Mapping[str, object],
+) -> tuple[SpecificityResult, dict[str, object]]:
+    fineweb_frequencies, documents_scanned = count_fineweb_document_frequencies(
+        shard_path,
+        profiles,
+        batch_size=batch_size,
+    )
+    records = _frequency_records(
+        profiles,
+        osm_name_occurrences,
+        fineweb_frequencies,
+    )
+    threshold = frequency_threshold(documents_scanned)
+    result = _apply_frequency_filter(
+        profiles,
+        records,
+        country_name=country_name,
+        threshold=threshold,
+        documents_scanned=documents_scanned,
+    )
+    artifact = {
+        **metadata,
+        "documents_scanned": documents_scanned,
+        "fineweb_document_frequency_threshold": threshold,
+        "frequencies": [record.to_record() for record in records],
+    }
+    return result, artifact
+
+
+def _frequency_records(
+    profiles: Sequence[PolygonProfile],
+    osm_name_occurrences: Mapping[str, int],
+    fineweb_frequencies: Mapping[str, int],
+) -> tuple[NameFrequency, ...]:
+    return tuple(
+        NameFrequency(
+            normalized_name=profile.normalized_name,
+            osm_occurrences=int(osm_name_occurrences.get(profile.normalized_name, 1)),
+            fineweb_document_frequency=int(
+                fineweb_frequencies.get(profile.normalized_name, 0)
+            ),
+        )
+        for profile in profiles
+    )
+
+
+def _apply_frequency_filter(
+    profiles: Sequence[PolygonProfile],
+    records: Sequence[NameFrequency],
+    *,
+    country_name: str,
+    threshold: int,
+    documents_scanned: int,
+) -> SpecificityResult:
+    result = filter_specific_profiles(
+        profiles,
+        {record.normalized_name: record for record in records},
+        country_name=country_name,
+        fineweb_document_frequency_threshold=threshold,
+    )
+    return SpecificityResult(
+        profiles=result.profiles,
+        frequencies=result.frequencies,
+        documents_scanned=documents_scanned,
+    )
 
 
 def _process_partitions(

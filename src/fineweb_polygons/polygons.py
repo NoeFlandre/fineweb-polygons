@@ -21,6 +21,7 @@ class PolygonReadResult:
     named_count: int
     unnamed_count: int
     filtered_count: int = 0
+    name_occurrences: tuple[tuple[str, int], ...] = ()
 
 
 class _NamedPolygonHandler(osmium.SimpleHandler):

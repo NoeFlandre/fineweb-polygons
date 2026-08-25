@@ -9,7 +9,7 @@ The repository contains code, tests, configuration, documentation, and small met
 ```text
 /Volumes/Seagate M3/projects/fineweb-polygons/
 ├── raw/          # immutable source inputs, including Monaco OSM extracts
-├── runs/         # run-specific manifests and checkpoint state
+├── runs/         # manifests, checkpoints, and V5 frequency artifacts
 ├── logs/         # run logs and diagnostics
 └── artifacts/    # generated, reviewable outputs
 ```
@@ -20,13 +20,27 @@ The repository contains code, tests, configuration, documentation, and small met
 
 Each run has a stable identifier and writes a manifest before processing. The manifest records raw-input checksums, the complete immutable retrieval definition selected from `versions.py`, configuration and version fingerprints, polygon-profile fingerprints, output schema version, and deterministic chunk identities. A chunk covers up to 32 contiguous Parquet row groups, writes its JSONL output atomically, and can be skipped on restart after its checkpoint is complete. Existing manifests are rejected when their saved version definition changes.
 
-The result is merged atomically only after all chunks have completed. Raw inputs, checkpoints, logs, and results remain below the configured Seagate data root.
+The result is merged atomically only after all chunks have completed. V5 first
+creates a name-frequency.json artifact from the PBF names and projected FineWeb
+text. The artifact records the shard fingerprint, base polygon profiles, OSM
+counts, FineWeb document counts, and the 0.1% cutoff. A matching artifact is
+reused on restart. Raw inputs, checkpoints, logs, and results remain below the
+configured Seagate data root.
 
 ## V2 profile and matching contract
 
 V2 reads area geometry directly from the raw OSM PBF, finds the Monaco `admin_level=8` city boundary, and keeps only meaningful named areas whose representative point is inside that boundary. Names shorter than three normalized characters and numeric-only names are excluded; equivalent normalized names are represented once.
 
 V2 accepts a document when a normalized polygon name appears in the URL, or when it appears in the text and that same text contains `Monaco` or `Principality of Monaco`. The evidence record retains the complete matched `text`, the URL, the fields that matched, and short excerpts for review.
+
+## V5 specificity and matching contract
+
+V5 uses the V3 all-area reader, so it does not find a country boundary. It
+counts normalized names before building the matcher. An OSM name must occur in
+one area and in no more than 0.1% of FineWeb documents. The configured country
+name is context only, never a polygon candidate. A document then needs both the selected name and the
+exact country name in the same text. The URL is evidence only. The matcher is
+an Aho-Corasick exact-token matcher, and the full text is retained.
 
 ## Logging contract
 

@@ -43,4 +43,10 @@ scan-v3 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-late
 scan-v4 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v4" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v4" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id v4-10bt-000-v1 --retrieval-version v4
 
+scan-v5 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" country="Monaco" run_id="v5-monaco-10bt-000-v3":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v5" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v5" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id "{{run_id}}" --retrieval-version v5 --country-name "{{country}}"
+
+scan-v6 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" country="Monaco" run_id="v6-monaco-10bt-000-v1":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache-v6" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v5" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id "{{run_id}}" --retrieval-version v6 --country-name "{{country}}"
+
 qa: format-check lint typecheck test crap docs

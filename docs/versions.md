@@ -1,5 +1,7 @@
 # Retrieval versions
 
+[GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
+
 Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`.
 
 ## V1
@@ -43,13 +45,41 @@ CLI flag: `--retrieval-version v4`
 - Document deduplication: keep one result per polygon and FineWeb document, using FineWeb `id` when present and otherwise URL plus a SHA-256 hash of the complete text.
 - Evidence: save the URL, complete FineWeb text, matched fields, context fields, and short display excerpts.
 
+## V5
+
+CLI flag: retrieval version v5
+
+- Polygon profiles: start with every meaningful named area from the PBF,
+  including closed ways and valid polygon relations. No country boundary is
+  searched for or required.
+- Name cleanup: use the main name tag, reject names shorter than three
+  normalized characters, numeric-only names, and names without letters, then
+  deduplicate normalized names.
+- Specificity filter: count each normalized name in the PBF and in the FineWeb
+  shard. Keep an OSM name only when it occurs once in the PBF and in no more
+  than 0.1% of FineWeb documents and is not the configured country name. The
+  country name supplies context only; it is never a polygon candidate.
+- Document rule: require both the selected polygon name and the configured
+  country name in the same FineWeb text. The URL is not a selection condition.
+- Matching: exact normalized, case-insensitive matching in text. The country
+  context is one exact configured name: Monaco for Monaco or Liechtenstein for
+  Liechtenstein.
+- Document deduplication: keep one result per polygon and FineWeb document,
+  using FineWeb id when present and otherwise URL plus a SHA-256 hash of the
+  complete text.
+- Evidence: save the URL, complete FineWeb text, matched fields, context
+  fields, and short display excerpts.
+- Resumability: save the name-frequency counts and cutoff in the run
+  directory; the manifest stores the artifact hash and the selected V5
+  definition.
+
 ## Reproducibility
 
 The selected definition is copied into every run manifest under `configuration.retrieval_definition`. The configuration hash covers that definition. A run cannot resume if the saved definition or configuration no longer matches the selected version. Checkpoints, logs, raw inputs, and output artifacts remain under the Seagate data root.
 
 ## Published Hugging Face files
 
-The public dataset exposes V1, V2, V3, and V4 as separate configs. Their retrieval rules
+The public dataset exposes V1, V2, V3, V4, V5, and V6 as separate configs. Their retrieval rules
 are comparable, but their historical evidence schemas are not identical:
 
 - `v1/train` is the original excerpt-only release. It has `text_excerpt` and
@@ -62,6 +92,34 @@ are comparable, but their historical evidence schemas are not identical:
   `text`, plus the excerpt fields and deduplicated evidence; its URL is not a
   selection condition. On the first shard it contains 1,282 records across 42
   polygon names, including 1,205 records selected from text alone.
+
+V5 exposes Monaco and Liechtenstein as separate viewer splits and keeps the
+complete FineWeb text in the same evidence schema as V4.
+
+## V6
+
+CLI flag: retrieval version `v6`
+
+- Polygon profiles: use the same meaningful named closed ways and valid polygon
+  relations as V5. No country boundary or OSM tags are used.
+- Name cleanup: use the main `name` tag, reject names shorter than three
+  normalized characters, numeric-only names, and labels without letters, then
+  keep only names that occur once in the PBF and in no more than 0.1% of FineWeb
+  documents. The configured country name is context only.
+- Document rule: require the selected polygon name and the exact configured
+  country name in FineWeb text. The closest name/country spans must have at most
+  500 characters between them after existing normalization. The URL is not a
+  selection condition.
+- Evidence: keep the full `text`, `name_country_distance`,
+  `polygon_name_sentence`, and `country_name_sentence`. V6 omits both
+  `text_excerpt` and `url_excerpt`; the URL itself remains metadata.
+- Resumability: reuse the V5 name-frequency artifact contract under each V6 run
+  directory and store the 500-character limit in the manifest definition and
+  configuration hash.
+
+V6 publishes Monaco and Liechtenstein as separate viewer splits. The V6 schema
+is intentionally different from V1–V5 because its sentence fields replace both
+excerpt fields.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.

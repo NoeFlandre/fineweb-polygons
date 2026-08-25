@@ -103,6 +103,7 @@ def test_cli_scan_passes_external_paths_to_runner(
     assert captured["config"].run_id == "case"
     assert captured["config"].batch_size == 16
     assert captured["config"].retrieval_version == "v2"
+    assert captured["config"].country_name == "Monaco"
     summary = json.loads(capsys.readouterr().out)
     assert summary == {
         "manifest_path": str(data_root / "runs" / "case" / "manifest.json"),
@@ -125,6 +126,7 @@ def test_cli_parser_has_stable_scan_defaults_and_help() -> None:
     assert parsed.run_id == "v1-10bt-000-v2"
     assert parsed.batch_size == 8192
     assert parsed.retrieval_version == "v1"
+    assert parsed.country_name == "Monaco"
     assert "scan one FineWeb Parquet shard" in parser.format_help()
 
 
@@ -158,10 +160,26 @@ def test_cli_parser_exposes_exact_scan_contract() -> None:
         ).retrieval_version
         == "v4"
     )
-    with pytest.raises(SystemExit):
+    assert (
         parser.parse_args(
-            ["scan", "--shard", "shard.parquet", "--retrieval-version", "v5"]
-        )
+            ["scan", "--shard", "shard.parquet", "--retrieval-version", "v6"]
+        ).retrieval_version
+        == "v6"
+    )
+    assert (
+        parser.parse_args(
+            [
+                "scan",
+                "--shard",
+                "shard.parquet",
+                "--retrieval-version",
+                "v5",
+                "--country-name",
+                "Liechtenstein",
+            ]
+        ).country_name
+        == "Liechtenstein"
+    )
 
 
 def test_cli_reports_unknown_commands_with_the_command_name(monkeypatch) -> None:
@@ -185,6 +203,10 @@ def test_cli_requires_a_subcommand_and_a_shard() -> None:
         parser.parse_args([])
     with pytest.raises(SystemExit):
         parser.parse_args(["scan"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["scan", "--shard", "shard.parquet", "--retrieval-version", "v7"]
+        )
 
 
 def test_cli_uses_default_pbf_path_and_reports_all_summary_fields(
@@ -220,6 +242,7 @@ def test_cli_uses_default_pbf_path_and_reports_all_summary_fields(
     )
 
     assert captured["config"].pbf_path == (data_root / "raw" / "monaco-latest.osm.pbf")
+    assert captured["config"].country_name == "Monaco"
     assert json.loads(capsys.readouterr().out) == {
         "manifest_path": str(data_root / "runs" / "default" / "manifest.json"),
         "matches_written": 6,
@@ -228,6 +251,43 @@ def test_cli_uses_default_pbf_path_and_reports_all_summary_fields(
         "result_path": str(data_root / "artifacts" / "result.jsonl"),
         "rows_scanned": 5,
     }
+
+
+def test_cli_passes_a_non_default_country_name_to_the_runner(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    data_root = tmp_path / "external"
+    captured = {}
+
+    def fake_runner(config):
+        captured["config"] = config
+        return RunSummary(
+            result_path=data_root / "artifacts" / "result.jsonl",
+            manifest_path=data_root / "runs" / "case" / "manifest.json",
+            partitions_completed=0,
+            partitions_skipped=0,
+            rows_scanned=0,
+            matches_written=0,
+        )
+
+    assert (
+        main(
+            [
+                "scan",
+                "--data-root",
+                str(data_root),
+                "--shard",
+                str(data_root / "raw" / "shard.parquet"),
+                "--country-name",
+                "Liechtenstein",
+            ],
+            runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["config"].country_name == "Liechtenstein"
+    capsys.readouterr()
 
 
 def test_cli_serializes_summary_with_stable_json_options(

@@ -21,12 +21,17 @@ def normalize_for_search(value: object, *, decode_url: bool = True) -> str:
     return _SEPARATOR_RE.sub(" ", text).strip()
 
 
-def has_monaco_marker(value: object, *, decode_url: bool = True) -> bool:
-    """Cheap, sound prefilter for either accepted Monaco context phrase."""
+def has_context_marker(
+    value: object, context_name: str, *, decode_url: bool = True
+) -> bool:
+    """Return whether a normalized field contains one exact context name."""
     if value is None:
         return False
-    text = unicodedata.normalize("NFKC", str(value))
-    if decode_url:
-        text = unquote(text)
-    text = text.casefold()
-    return "monaco" in text
+    normalized = normalize_for_search(value, decode_url=decode_url)
+    context = normalize_for_search(context_name, decode_url=False)
+    return bool(context) and f" {context} " in f" {normalized} "
+
+
+def has_monaco_marker(value: object, *, decode_url: bool = True) -> bool:
+    """Backward-compatible Monaco context prefilter for older callers."""
+    return has_context_marker(value, "Monaco", decode_url=decode_url)

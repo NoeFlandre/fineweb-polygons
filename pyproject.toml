@@ -72,4 +72,4 @@ quote-style = "double"
 source_paths = ["src/fineweb_polygons"]
 also_copy = ["scripts/"]
 on_dependency_change = "rerun"
-pytest_add_cli_args = ["-q"]
+pytest_add_cli_args = ["-q", "-x"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, Literal
 
-RetrievalVersion = Literal["v1", "v2", "v3", "v4"]
+RetrievalVersion = Literal["v1", "v2", "v3", "v4", "v5", "v6"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,11 +22,17 @@ class RetrievalDefinition:
     requires_text_context: bool
     requires_url_name: bool
     deduplicate_documents: bool
+    max_name_country_distance: int | None = None
 
     @property
     def requires_text_name(self) -> bool:
         """Whether the polygon name must be found in FineWeb text."""
-        return self.version == "v4"
+        return self.version in ("v4", "v5", "v6")
+
+    @property
+    def requires_name_specificity(self) -> bool:
+        """Whether V5 frequency filtering must be applied to polygon names."""
+        return self.version in ("v5", "v6")
 
     def to_record(self) -> dict[str, object]:
         """Return the definition embedded in a run manifest."""
@@ -44,6 +50,10 @@ class RetrievalDefinition:
         }
         if self.requires_text_name:
             record["requires_text_name"] = True
+        if self.requires_name_specificity:
+            record["requires_name_specificity"] = True
+        if self.max_name_country_distance is not None:
+            record["max_name_country_distance"] = self.max_name_country_distance
         return record
 
 
@@ -135,6 +145,57 @@ _DEFINITIONS: Final[dict[RetrievalVersion, RetrievalDefinition]] = {
         requires_url_name=False,
         deduplicate_documents=True,
     ),
+    "v5": RetrievalDefinition(
+        version="v5",
+        title="Specific polygon areas with country-in-text matching",
+        polygon_profile_version="v5-specific-meaningful-polygon-areas",
+        matcher_version="v5-exact-specific-name-and-country-in-text",
+        polygon_rule=(
+            "Start with every meaningful named closed way and polygon relation. "
+            "Keep a name only when it is not the configured country name, occurs "
+            "once in the PBF, and occurs in no more than 0.1% of FineWeb documents."
+        ),
+        document_rule=(
+            "Keep a document only when the selected polygon name and the exact "
+            "configured country name both appear in the FineWeb text. The URL "
+            "does not select documents."
+        ),
+        evidence_rule=(
+            "Use case-insensitive exact normalized matching and retain the full "
+            "FineWeb text, URL, evidence fields, and excerpts."
+        ),
+        requires_text_context=True,
+        requires_url_name=False,
+        deduplicate_documents=True,
+    ),
+    "v6": RetrievalDefinition(
+        version="v6",
+        title="Specific polygon areas with local text-span matching",
+        polygon_profile_version="v6-specific-meaningful-polygon-areas",
+        matcher_version=(
+            "v6-exact-specific-name-and-country-within-500-normalized-characters"
+        ),
+        polygon_rule=(
+            "Start with every meaningful named closed way and polygon relation. "
+            "Keep a name only when it is not the configured country name, occurs "
+            "once in the PBF, and occurs in no more than 0.1% of FineWeb documents."
+        ),
+        document_rule=(
+            "Keep a document only when the selected polygon name and the exact "
+            "configured country name both appear in the FineWeb text with at most "
+            "500 normalized characters between their closest spans. The URL "
+            "does not select documents."
+        ),
+        evidence_rule=(
+            "Use case-insensitive exact normalized matching, retain the full "
+            "FineWeb text, and save the closest normalized name-country distance "
+            "plus both original-text sentences."
+        ),
+        requires_text_context=True,
+        requires_url_name=False,
+        deduplicate_documents=True,
+        max_name_country_distance=500,
+    ),
 }
 
 
@@ -142,7 +203,9 @@ def get_retrieval_definition(version: str) -> RetrievalDefinition:
     """Return a frozen definition or reject an unknown version."""
     definition = _DEFINITIONS.get(version)
     if definition is None:
-        raise ValueError("retrieval_version must be v1, v2, v3, or v4") from None
+        raise ValueError(
+            "retrieval_version must be v1, v2, v3, v4, v5, or v6"
+        ) from None
     return definition
 
 
