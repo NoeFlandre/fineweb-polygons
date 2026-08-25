@@ -46,13 +46,19 @@ configs:
         path: data/v7/monaco-v7-10bt-000-v1.jsonl
       - split: liechtenstein
         path: data/v7/liechtenstein-v7-10bt-000-v1.jsonl
+  - config_name: v8
+    data_files:
+      - split: monaco
+        path: data/v8/monaco-v8-10bt-000-v1-topic.jsonl
+      - split: liechtenstein
+        path: data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl
 ---
 
 # FineWeb Polygons
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 and V6 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V8 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
 and `/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf`.
@@ -125,7 +131,7 @@ and skips the frequency pass.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 only filters already selected V7 documents with a fixed topic vocabulary; it does not add new polygon names or run an LLM. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
 
 ## Public tiny-shard artifacts
 
@@ -145,6 +151,8 @@ Hugging Face viewer.
 - V6 Liechtenstein: `data/v6/liechtenstein-v6-10bt-000-v1.jsonl`
 - V7 Monaco: `data/v7/monaco-v7-10bt-000-v1.jsonl`
 - V7 Liechtenstein: `data/v7/liechtenstein-v7-10bt-000-v1.jsonl`
+- V8 Monaco: `data/v8/monaco-v8-10bt-000-v1-topic.jsonl`
+- V8 Liechtenstein: `data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -211,6 +219,26 @@ manifest. V7 does not upload the model or any raw FineWeb/OSM data.
 The code and manifests still preserve the retrieval definition for each version;
 new output should use a new artifact path rather than overwriting a published
 file.
+
+### V8 — topic-vocabulary filtering from V7
+
+V8 is a post-processing version, not a new polygon retrieval rule. It reads
+each V7 JSONL artifact and keeps a complete V7 row only when its full `text`
+contains at least one of the 136 approved strong topic terms. Matching is
+case-insensitive, uses Unicode NFKC normalization and whole-word boundaries,
+and never examines the URL. The same vocabulary is used for Monaco and
+Liechtenstein; it is not country-aware.
+
+V8 preserves every kept V7 field, including the complete `text` and ordered
+`sentences` list. It records the source, result, and vocabulary SHA-256 values,
+term categories, row counts, and matching settings in its manifest. The
+vocabulary JSON and both country manifests are published as HF metadata; raw
+FineWeb, OSM, and model files remain on the Seagate.
+
+On the first shard, V8 kept 39 of 45 Monaco V7 documents and filtered 6; the
+kept rows cover 25 polygon names and contain 4,472 sentences. It kept all 6
+Liechtenstein V7 documents, covering 5 polygon names and 328 sentences.
+Category counts overlap because one document can match several categories.
 
 ## First-shard run
 
@@ -288,6 +316,25 @@ uv run fineweb-polygons segment-v7 \
   --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v6-liechtenstein-10bt-000-v1-matches.jsonl" \
   --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-liechtenstein-10bt-000-v1-sentences.jsonl" \
   --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v7-liechtenstein-10bt-000-v1/manifest.json"
+```
+
+V8 topic filtering reads those V7 artifacts and keeps only rows whose full
+`text` contains at least one approved vocabulary term:
+
+```bash
+uv run fineweb-polygons filter-v8 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v8-monaco-10bt-000-v1/manifest.json" \
+  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+
+uv run fineweb-polygons filter-v8 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-liechtenstein-10bt-000-v1-sentences.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-liechtenstein-10bt-000-v1-topic.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v8-liechtenstein-10bt-000-v1/manifest.json" \
+  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
 ```
 
 ## License and upstream data

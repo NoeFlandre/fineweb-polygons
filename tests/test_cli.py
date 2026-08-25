@@ -10,6 +10,7 @@ from fineweb_polygons.cli import _build_parser, main
 from fineweb_polygons.foundation import DEFAULT_DATA_ROOT
 from fineweb_polygons.runs import RunSummary
 from fineweb_polygons.v7 import V7RunSummary
+from fineweb_polygons.v8 import V8RunSummary
 
 
 def test_cli_reports_foundation_only(capsys) -> None:
@@ -283,6 +284,65 @@ def test_cli_parser_exposes_the_separate_v7_segmentation_command() -> None:
     assert segment_help == "split V6 documents into exact sentence lists"
 
 
+def test_cli_parser_exposes_the_separate_v8_topic_filter_command() -> None:
+    parser = _build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "filter-v8",
+            "--input",
+            "v7.jsonl",
+            "--output",
+            "v8.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--vocabulary",
+            "vocabulary.json",
+        ]
+    )
+
+    assert parsed.command == "filter-v8"
+    assert parsed.data_root == DEFAULT_DATA_ROOT
+    assert parsed.input == Path("v7.jsonl")
+    assert parsed.output == Path("v8.jsonl")
+    assert parsed.manifest == Path("manifest.json")
+    assert parsed.vocabulary == Path("vocabulary.json")
+
+    subparsers = next(
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    topic_help = next(
+        action.help
+        for action in subparsers._choices_actions
+        if action.dest == "filter-v8"
+    )
+    assert topic_help == "filter V7 documents with the approved topic vocabulary"
+
+
+@pytest.mark.parametrize(
+    "missing", ["--input", "--output", "--manifest", "--vocabulary"]
+)
+def test_cli_v8_requires_all_input_paths(missing: str) -> None:
+    parser = _build_parser()
+    arguments = {
+        "--input": "v7.jsonl",
+        "--output": "v8.jsonl",
+        "--manifest": "manifest.json",
+        "--vocabulary": "vocabulary.json",
+    }
+    filtered = [
+        value
+        for option, value in arguments.items()
+        if option != missing
+        for value in (option, value)
+    ]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["filter-v8", *filtered])
+
+
 def test_cli_runs_v7_segmentation_and_serializes_its_summary(
     tmp_path: Path, capsys, monkeypatch
 ) -> None:
@@ -349,6 +409,109 @@ def test_cli_runs_v7_segmentation_and_serializes_its_summary(
         )
         + "\n"
     )
+
+
+def test_cli_runs_v8_topic_filter_and_serializes_its_summary(
+    tmp_path: Path, capsys
+) -> None:
+    data_root = tmp_path / "external"
+    captured = {}
+
+    def fake_runner(config):
+        captured["config"] = config
+        return V8RunSummary(
+            output_path=data_root / "artifacts" / "v8.jsonl",
+            manifest_path=data_root / "runs" / "v8" / "manifest.json",
+            rows_processed=3,
+            rows_kept=1,
+            rows_filtered=2,
+            category_documents={"land_use": 1},
+            result_sha256="result-sha",
+        )
+
+    assert (
+        main(
+            [
+                "filter-v8",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "artifacts" / "v7.jsonl"),
+                "--output",
+                str(data_root / "artifacts" / "v8.jsonl"),
+                "--manifest",
+                str(data_root / "runs" / "v8" / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v8_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["config"].input_path == data_root / "artifacts" / "v7.jsonl"
+    assert captured["config"].output_path == data_root / "artifacts" / "v8.jsonl"
+    assert captured["config"].manifest_path == (
+        data_root / "runs" / "v8" / "manifest.json"
+    )
+    assert captured["config"].vocabulary_path == data_root / "vocabulary.json"
+    assert json.loads(capsys.readouterr().out) == {
+        "category_documents": {"land_use": 1},
+        "manifest_path": str(data_root / "runs" / "v8" / "manifest.json"),
+        "output_path": str(data_root / "artifacts" / "v8.jsonl"),
+        "result_sha256": "result-sha",
+        "rows_filtered": 2,
+        "rows_kept": 1,
+        "rows_processed": 3,
+    }
+
+
+def test_cli_v8_passes_explicit_json_serialization_flags(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    data_root = tmp_path / "external"
+    captured: dict[str, object] = {}
+
+    def fake_dumps(value: object, **kwargs: object) -> str:
+        captured["value"] = value
+        captured["kwargs"] = kwargs
+        return "serialized"
+
+    def fake_runner(config):
+        return V8RunSummary(
+            output_path=data_root / "v8.jsonl",
+            manifest_path=data_root / "manifest.json",
+            rows_processed=1,
+            rows_kept=1,
+            rows_filtered=0,
+            category_documents={"land_use": 1},
+            result_sha256="sha",
+        )
+
+    monkeypatch.setattr(cli_module.json, "dumps", fake_dumps)
+
+    assert (
+        main(
+            [
+                "filter-v8",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v7.jsonl"),
+                "--output",
+                str(data_root / "v8.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v8_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["kwargs"] == {"ensure_ascii": False, "sort_keys": True}
+    assert capsys.readouterr().out == "serialized\n"
 
 
 def test_cli_v7_passes_explicit_json_serialization_flags(
@@ -573,6 +736,45 @@ def test_cli_reports_v7_runner_errors_as_exit_code_two(
         == 2
     )
 
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == f"error: {error}\n"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        FileNotFoundError("missing"),
+        OSError("disk"),
+        ValueError("bad"),
+    ],
+)
+def test_cli_reports_v8_runner_errors_as_exit_code_two(
+    tmp_path: Path, capsys, error: Exception
+) -> None:
+    def failing_runner(config):
+        raise error
+
+    data_root = tmp_path / "external"
+    assert (
+        main(
+            [
+                "filter-v8",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v7.jsonl"),
+                "--output",
+                str(data_root / "v8.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v8_runner=failing_runner,
+        )
+        == 2
+    )
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == f"error: {error}\n"

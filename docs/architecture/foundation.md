@@ -11,7 +11,7 @@ The repository contains code, tests, configuration, documentation, and small met
 ├── raw/          # immutable source inputs, including Monaco OSM extracts
 ├── runs/         # manifests, checkpoints, and V5 frequency artifacts
 ├── logs/         # run logs and diagnostics
-└── artifacts/    # generated, reviewable outputs, including V7 sentence lists
+└── artifacts/    # generated, reviewable outputs, including V7/V8 results
 ```
 
 `ProjectPaths` is the only current code surface for this layout. It accepts an environment override for tests and controlled deployments, while defaulting to the Seagate path. The repository must never silently fall back to a local data directory.
@@ -53,6 +53,19 @@ output and its manifest are published with atomic replacement. The manifest
 fingerprints the V6 input, output, model, providers, and segmentation settings,
 so a completed run can be reused safely. The model cache and all generated
 files remain on the Seagate.
+
+## V8 topic-filter post-processing contract
+
+V8 reads a completed V7 JSONL artifact and never reopens the FineWeb shard.
+For each full `text` value it uses a fixed 136-term vocabulary. A row is kept
+when any term matches as a case-insensitive NFKC whole word. The URL is not
+searched. Kept rows are copied unchanged, including `text` and `sentences`.
+
+The vocabulary, source artifact, and output artifact are SHA-256 fingerprinted
+in the manifest. The manifest also records matching settings, vocabulary
+categories, row counts, and category document counts. Output and manifest
+writes are atomic, and a completed run is reusable without re-reading the
+vocabulary or source rows when all fingerprints still match.
 
 ## Logging contract
 

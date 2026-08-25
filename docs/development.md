@@ -114,6 +114,27 @@ adds an ordered `sentences` list, and fails if joining that list does not
 reconstruct the original text exactly. A matching completed manifest lets a
 restart reuse the output without loading the model.
 
+## V8 topic filtering
+
+V8 reads the V7 artifacts and keeps a document when its complete `text` has at
+least one of the approved strong topic terms. Matching is case-insensitive,
+NFKC-normalized, and whole-word based; the URL is ignored. The same vocabulary
+is used for both countries, and the full V7 row is preserved.
+
+```bash
+uv run fineweb-polygons filter-v8 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v8-monaco-10bt-000-v1/manifest.json" \
+  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+```
+
+Repeat with the Liechtenstein V7 input and V8 output paths. A matching
+completed manifest makes a restart reuse the result without scanning the input.
+The vocabulary and run manifests remain on the Seagate and are published as
+HF metadata for reproducibility.
+
 ## Red-green-refactor
 
 New behavior follows TDD:

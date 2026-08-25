@@ -2,7 +2,7 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7 is a post-processing version: it adds sentence lists to V6 without changing which documents were selected.
+Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7 and V8 are post-processing versions: V7 adds sentence lists to V6, and V8 filters those V7 rows without changing polygon matching.
 
 ## V1
 
@@ -79,7 +79,7 @@ The selected definition is copied into every run manifest under `configuration.r
 
 ## Published Hugging Face files
 
-The public dataset exposes V1, V2, V3, V4, V5, V6, and V7 as separate configs. Their retrieval rules
+The public dataset exposes V1, V2, V3, V4, V5, V6, V7, and V8 as separate configs. Their retrieval rules
 are comparable, but their historical evidence schemas are not identical:
 
 - `v1/train` is the original excerpt-only release. It has `text_excerpt` and
@@ -145,6 +145,34 @@ The public V7 files are separate viewer splits:
 
 V7 retains the complete `text` for auditability. It uploads neither the raw
 FineWeb/OSM inputs nor the sentence model.
+
+## V8
+
+V8 is a post-processing version, so it is not passed to `scan
+--retrieval-version`. It reads the V7 JSONL artifact and tests the complete
+FineWeb `text` field against the approved [V8 topic vocabulary](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/v8/v8-topic-vocabulary-v1.json).
+
+- Keep a row when at least one of the 136 vocabulary terms occurs in full
+  `text`.
+- Matching is case-insensitive, applies Unicode NFKC normalization, and uses
+  whole-word boundaries. `url` is never searched.
+- The vocabulary contains only strong standalone terms grouped into five
+  topic categories. It is shared by both country splits and is not
+  country-aware.
+- Preserve every V7 field unchanged, including complete `text` and the ordered
+  `sentences` list.
+- Record source, result, and vocabulary SHA-256 values, matching settings,
+  category counts, and processed/kept/filtered row counts in the V8 manifest.
+- Write atomically and reuse a completed result when all fingerprints match.
+
+The public V8 files are separate viewer splits. Their manifests and the exact
+vocabulary are available under the HF dataset `metadata/v8/` directory. The
+implementation is in [`v8.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/v8.py).
+
+On the first shard, V8 kept 39 of 45 Monaco V7 documents and filtered 6; the
+kept rows cover 25 polygon names and 4,472 sentences. It kept all 6
+Liechtenstein V7 documents, covering 5 polygon names and 328 sentences.
+Category counts overlap because a document may match several categories.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.
