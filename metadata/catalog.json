@@ -102,8 +102,8 @@
       "countries": ["Monaco", "Liechtenstein"],
       "source_version": "v6",
       "data_files": [
-        {"split": "monaco", "path": "data/v7/monaco-v7-10bt-000-v1-sentences.jsonl"},
-        {"split": "liechtenstein", "path": "data/v7/liechtenstein-v7-10bt-000-v1-sentences.jsonl"}
+        {"split": "monaco", "path": "data/v7/monaco-v7-10bt-000-v1.jsonl"},
+        {"split": "liechtenstein", "path": "data/v7/liechtenstein-v7-10bt-000-v1.jsonl"}
       ],
       "manifest_files": ["metadata/v7/monaco/manifest.json", "metadata/v7/liechtenstein/manifest.json"],
       "readme": "data/v7/README.md",
