@@ -135,6 +135,36 @@ completed manifest makes a restart reuse the result without scanning the input.
 The vocabulary and run manifests remain on the Seagate and are published as
 HF metadata for reproducibility.
 
+## V9 local sentence-topic filtering
+
+V9 reads the V8 artifacts and keeps only vocabulary-matching sentences within
+two sentence positions of polygon-name evidence. It preserves the full V8 row
+and adds a text-only `relevant_sentences` list plus an aligned
+`relevant_sentence_metadata` list. The V8 vocabulary remains the single source
+of topic terms. This is V9 output schema version 2; selection is unchanged:
+
+```bash
+uv run fineweb-polygons filter-v9 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v9-monaco-10bt-000-v1/manifest.json" \
+  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+
+uv run fineweb-polygons filter-v9 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-liechtenstein-10bt-000-v1-topic.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-liechtenstein-10bt-000-v1-topic-sentences.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v9-liechtenstein-10bt-000-v1/manifest.json" \
+  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+```
+
+V9 keeps a sentence only when it has a whole-word topic match and the polygon
+name occurs in the same sentence or within two sentence positions. The country
+distance is saved for audit; it is not a second sentence-level gate because V8
+already applied the document-level 500-character name/country rule. The
+metadata list is aligned with `relevant_sentences` by position.
+
 ## Red-green-refactor
 
 New behavior follows TDD:

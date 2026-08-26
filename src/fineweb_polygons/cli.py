@@ -16,11 +16,13 @@ from fineweb_polygons.foundation import (
 from fineweb_polygons.runs import RunSummary, ScanRunConfig, execute_run
 from fineweb_polygons.v7 import V7RunConfig, V7RunSummary, run_v7
 from fineweb_polygons.v8 import V8RunConfig, V8RunSummary, run_v8
+from fineweb_polygons.v9 import V9RunConfig, V9RunSummary, run_v9
 
 FOUNDATION_MESSAGE = "fineweb-polygons foundation only; no pipeline executed"
 Runner = Callable[[ScanRunConfig], RunSummary]
 V7Runner = Callable[[V7RunConfig], V7RunSummary]
 V8Runner = Callable[[V8RunConfig], V8RunSummary]
+V9Runner = Callable[[V9RunConfig], V9RunSummary]
 
 
 def main(
@@ -29,6 +31,7 @@ def main(
     runner: Runner = execute_run,
     v7_runner: V7Runner = run_v7,
     v8_runner: V8Runner = run_v8,
+    v9_runner: V9Runner = run_v9,
 ) -> int:
     """Run the requested command and return a shell exit code."""
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -41,6 +44,7 @@ def main(
         "scan": lambda: _run_scan(parsed, runner),
         "segment-v7": lambda: _run_segment_v7(parsed, v7_runner),
         "filter-v8": lambda: _run_filter_v8(parsed, v8_runner),
+        "filter-v9": lambda: _run_filter_v9(parsed, v9_runner),
     }
     handler = handlers.get(parsed.command)
     if handler is None:
@@ -80,6 +84,14 @@ def _build_parser() -> argparse.ArgumentParser:
     topic.add_argument("--output", type=Path, required=True)
     topic.add_argument("--manifest", type=Path, required=True)
     topic.add_argument("--vocabulary", type=Path, required=True)
+    sentence_topic = commands.add_parser(
+        "filter-v9", help="filter V8 rows to local topic-relevant sentences"
+    )
+    sentence_topic.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
+    sentence_topic.add_argument("--input", type=Path, required=True)
+    sentence_topic.add_argument("--output", type=Path, required=True)
+    sentence_topic.add_argument("--manifest", type=Path, required=True)
+    sentence_topic.add_argument("--vocabulary", type=Path, required=True)
     return parser
 
 
@@ -153,6 +165,28 @@ def _run_filter_v8(parsed: argparse.Namespace, runner: V8Runner) -> int:
     return 0
 
 
+def _run_filter_v9(parsed: argparse.Namespace, runner: V9Runner) -> int:
+    data_root = parsed.data_root.expanduser().resolve()
+    paths = ProjectPaths.from_environment(
+        Path.cwd(),
+        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
+    )
+    try:
+        validate_external_data_root(paths)
+        config = V9RunConfig(
+            input_path=validate_data_path(paths, parsed.input),
+            output_path=validate_data_path(paths, parsed.output),
+            manifest_path=validate_data_path(paths, parsed.manifest),
+            vocabulary_path=validate_data_path(paths, parsed.vocabulary),
+        )
+        summary = runner(config)
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(json.dumps(_v9_summary_record(summary), ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def _summary_record(summary: RunSummary) -> dict[str, object]:
     return {
         "result_path": str(summary.result_path),
@@ -183,4 +217,18 @@ def _v8_summary_record(summary: V8RunSummary) -> dict[str, object]:
         "rows_filtered": summary.rows_filtered,
         "rows_kept": summary.rows_kept,
         "rows_processed": summary.rows_processed,
+    }
+
+
+def _v9_summary_record(summary: V9RunSummary) -> dict[str, object]:
+    return {
+        "category_sentences": summary.category_sentences,
+        "manifest_path": str(summary.manifest_path),
+        "output_path": str(summary.output_path),
+        "relevant_sentences_written": summary.relevant_sentences_written,
+        "result_sha256": summary.result_sha256,
+        "rows_filtered": summary.rows_filtered,
+        "rows_kept": summary.rows_kept,
+        "rows_processed": summary.rows_processed,
+        "sentences_processed": summary.sentences_processed,
     }

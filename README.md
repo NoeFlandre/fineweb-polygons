@@ -52,13 +52,19 @@ configs:
         path: data/v8/monaco-v8-10bt-000-v1-topic.jsonl
       - split: liechtenstein
         path: data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl
+  - config_name: v9
+    data_files:
+      - split: monaco
+        path: data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl
+      - split: liechtenstein
+        path: data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl
 ---
 
 # FineWeb Polygons
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V8 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V9 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
 and `/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf`.
@@ -127,11 +133,11 @@ and skips the frequency pass.
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass. V7 is a content-fingerprinted, atomic post-processing run that can reuse a completed output without rerunning the model.
+- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass. V7, V8, and V9 are content-fingerprinted, atomic post-processing runs that can reuse completed outputs.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 only filters already selected V7 documents with a fixed topic vocabulary; it does not add new polygon names or run an LLM. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 filters already selected V7 documents with a fixed topic vocabulary at document level. V9 filters V8 sentences with the same vocabulary near polygon-name evidence; it does not add new polygon names or run an LLM. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
 
 ## Public tiny-shard artifacts
 
@@ -153,6 +159,8 @@ Hugging Face viewer.
 - V7 Liechtenstein: `data/v7/liechtenstein-v7-10bt-000-v1.jsonl`
 - V8 Monaco: `data/v8/monaco-v8-10bt-000-v1-topic.jsonl`
 - V8 Liechtenstein: `data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl`
+- V9 Monaco: `data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl`
+- V9 Liechtenstein: `data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -239,6 +247,31 @@ On the first shard, V8 kept 39 of 45 Monaco V7 documents and filtered 6; the
 kept rows cover 25 polygon names and contain 4,472 sentences. It kept all 6
 Liechtenstein V7 documents, covering 5 polygon names and 328 sentences.
 Category counts overlap because one document can match several categories.
+
+### V9 — sentence-level topic filtering from V8
+
+V9 is a post-processing version. It reads V8 rows and examines each original
+sentence using the same 136-term vocabulary. A sentence is kept only when it
+contains at least one whole-word topic term and is at most two sentence
+positions from a sentence containing the polygon name. This bounded window
+keeps place context without treating an unrelated topic word elsewhere in a
+long document as evidence. The country remains an audit anchor; V8 has already
+required the polygon name and country to be within 500 normalized characters.
+
+V9 preserves the complete `text` and original `sentences` list, then adds
+`relevant_sentences` as a plain list of sentence strings for quick review.
+The aligned `relevant_sentence_metadata` list stores the original sentence
+index, matched terms, matched categories, topic counts, and polygon/country
+sentence distances without repeating the sentence text. Rows with no local
+topic sentence are filtered. The output and manifest are atomic and reusable
+when the V8 input, vocabulary, settings, and result hash match.
+This is V9 output schema version 2; the selection rule is unchanged.
+
+On the first shard, V9 kept 29 of 39 Monaco V8 rows and wrote 93 relevant
+sentences. It kept 4 of 6 Liechtenstein V8 rows and wrote 9 relevant sentences.
+The polygon-name evidence was in the same sentence for 33 Monaco sentences and
+3 Liechtenstein sentences; the remaining matches were one or two sentence
+positions away.
 
 ## First-shard run
 

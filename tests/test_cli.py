@@ -11,6 +11,7 @@ from fineweb_polygons.foundation import DEFAULT_DATA_ROOT
 from fineweb_polygons.runs import RunSummary
 from fineweb_polygons.v7 import V7RunSummary
 from fineweb_polygons.v8 import V8RunSummary
+from fineweb_polygons.v9 import V9RunSummary
 
 
 def test_cli_reports_foundation_only(capsys) -> None:
@@ -512,6 +513,194 @@ def test_cli_v8_passes_explicit_json_serialization_flags(
 
     assert captured["kwargs"] == {"ensure_ascii": False, "sort_keys": True}
     assert capsys.readouterr().out == "serialized\n"
+
+
+def test_cli_parser_exposes_the_separate_v9_sentence_topic_filter_command() -> None:
+    parser = _build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "filter-v9",
+            "--input",
+            "v8.jsonl",
+            "--output",
+            "v9.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--vocabulary",
+            "vocabulary.json",
+        ]
+    )
+
+    assert parsed.command == "filter-v9"
+    assert parsed.data_root == DEFAULT_DATA_ROOT
+    assert parsed.input == Path("v8.jsonl")
+    assert parsed.output == Path("v9.jsonl")
+    assert parsed.manifest == Path("manifest.json")
+    assert parsed.vocabulary == Path("vocabulary.json")
+
+
+def test_cli_v9_parser_requires_all_paths_and_exposes_its_help_text() -> None:
+    parser = _build_parser()
+    full = [
+        "filter-v9",
+        "--input",
+        "v8.jsonl",
+        "--output",
+        "v9.jsonl",
+        "--manifest",
+        "manifest.json",
+        "--vocabulary",
+        "vocabulary.json",
+    ]
+
+    help_text = parser.format_help()
+    assert "filter V8 rows to local topic-relevant sentences" in help_text
+    assert "XX" not in help_text
+    for option in ("--input", "--output", "--manifest", "--vocabulary"):
+        option_index = full.index(option)
+        with pytest.raises(SystemExit):
+            parser.parse_args(full[:option_index] + full[option_index + 2 :])
+
+
+def test_cli_v9_serializes_with_explicit_stable_json_options(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    data_root = tmp_path / "external"
+    captured: dict[str, object] = {}
+
+    def fake_dumps(value: object, **kwargs: object) -> str:
+        captured["value"] = value
+        captured["kwargs"] = kwargs
+        return "serialized"
+
+    def fake_runner(config):
+        return V9RunSummary(
+            output_path=data_root / "v9.jsonl",
+            manifest_path=data_root / "manifest.json",
+            rows_processed=0,
+            rows_kept=0,
+            rows_filtered=0,
+            sentences_processed=0,
+            relevant_sentences_written=0,
+            category_sentences={},
+            result_sha256="sha",
+        )
+
+    monkeypatch.setattr(cli_module.json, "dumps", fake_dumps)
+
+    assert (
+        main(
+            [
+                "filter-v9",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v8.jsonl"),
+                "--output",
+                str(data_root / "v9.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v9_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["kwargs"] == {"ensure_ascii": False, "sort_keys": True}
+    assert capsys.readouterr().out == "serialized\n"
+
+
+def test_cli_v9_reports_runner_errors_to_stderr(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "external"
+
+    def failing_runner(config):
+        raise ValueError("bad V9 input")
+
+    assert (
+        main(
+            [
+                "filter-v9",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v8.jsonl"),
+                "--output",
+                str(data_root / "v9.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v9_runner=failing_runner,
+        )
+        == 2
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "error: bad V9 input\n"
+
+
+def test_cli_runs_v9_sentence_topic_filter_and_serializes_its_summary(
+    tmp_path: Path, capsys
+) -> None:
+    data_root = tmp_path / "external"
+    captured = {}
+
+    def fake_runner(config):
+        captured["config"] = config
+        return V9RunSummary(
+            output_path=data_root / "artifacts" / "v9.jsonl",
+            manifest_path=data_root / "runs" / "v9" / "manifest.json",
+            rows_processed=3,
+            rows_kept=1,
+            rows_filtered=2,
+            sentences_processed=10,
+            relevant_sentences_written=1,
+            category_sentences={"land_use": 1},
+            result_sha256="result-sha",
+        )
+
+    assert (
+        main(
+            [
+                "filter-v9",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "artifacts" / "v8.jsonl"),
+                "--output",
+                str(data_root / "artifacts" / "v9.jsonl"),
+                "--manifest",
+                str(data_root / "runs" / "v9" / "manifest.json"),
+                "--vocabulary",
+                str(data_root / "vocabulary.json"),
+            ],
+            v9_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["config"].input_path == data_root / "artifacts" / "v8.jsonl"
+    assert captured["config"].output_path == data_root / "artifacts" / "v9.jsonl"
+    assert captured["config"].manifest_path == (
+        data_root / "runs" / "v9" / "manifest.json"
+    )
+    assert captured["config"].vocabulary_path == data_root / "vocabulary.json"
+    assert json.loads(capsys.readouterr().out) == {
+        "category_sentences": {"land_use": 1},
+        "manifest_path": str(data_root / "runs" / "v9" / "manifest.json"),
+        "output_path": str(data_root / "artifacts" / "v9.jsonl"),
+        "relevant_sentences_written": 1,
+        "result_sha256": "result-sha",
+        "rows_filtered": 2,
+        "rows_kept": 1,
+        "rows_processed": 3,
+        "sentences_processed": 10,
+    }
 
 
 def test_cli_v7_passes_explicit_json_serialization_flags(

@@ -2,7 +2,7 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7 and V8 are post-processing versions: V7 adds sentence lists to V6, and V8 filters those V7 rows without changing polygon matching.
+Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7, V8, and V9 are post-processing versions: V7 adds sentence lists to V6, V8 filters those V7 rows at document level, and V9 filters V8 sentences without changing polygon matching.
 
 ## V1
 
@@ -173,6 +173,43 @@ On the first shard, V8 kept 39 of 45 Monaco V7 documents and filtered 6; the
 kept rows cover 25 polygon names and 4,472 sentences. It kept all 6
 Liechtenstein V7 documents, covering 5 polygon names and 328 sentences.
 Category counts overlap because a document may match several categories.
+
+## V9
+
+V9 is a post-processing step over the two V8 artifacts. It uses the same
+approved vocabulary, but applies it to each sentence instead of the complete
+document.
+
+- Keep a sentence when at least one whole-word V8 topic term occurs in that
+  sentence.
+- Require the sentence to be within two sentence positions of a sentence that
+  contains the polygon name, using the same case-insensitive normalized exact
+  matching as earlier versions.
+- Preserve the complete `text`, the original ordered `sentences`, and every
+  V8 field. Add `relevant_sentences`, a list containing only selected sentence
+  strings. Add the aligned `relevant_sentence_metadata` list containing the
+  original index, matched terms, matched categories, topic counts, and
+  polygon/country sentence distances, without repeating sentence text.
+- Filter a document when it has no qualifying local topic sentence.
+- Keep the configured country as an audit anchor. V8 already guarantees the
+  polygon and country are within 500 normalized characters in the document.
+- Record source, result, vocabulary, context-window, count, and matching
+  settings in the manifest. Atomic output and matching hashes make a completed
+  run reusable.
+- The current V9 output schema is version 2: `relevant_sentences` is text-only,
+  while `relevant_sentence_metadata` contains the aligned per-sentence
+  metadata. This changes presentation only, not selection.
+
+The public V9 paths are:
+
+- `v9/monaco`: `data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl`
+- `v9/liechtenstein`: `data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl`
+
+On the first shard, V9 kept 29 of 39 Monaco V8 rows and wrote 93 relevant
+sentences. It kept 4 of 6 Liechtenstein V8 rows and wrote 9 relevant sentences.
+The polygon-name evidence was in the same sentence for 33 Monaco sentences and
+3 Liechtenstein sentences; the remaining matches were one or two sentence
+positions away.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.
