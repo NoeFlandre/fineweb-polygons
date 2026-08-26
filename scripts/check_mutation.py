@@ -5,7 +5,16 @@ from __future__ import annotations
 import subprocess
 import sys
 
-BAD_STATUSES = ("survived", "timeout", "not checked")
+BAD_STATUSES = ("survived", "timeout", "not checked", "segfault")
+
+
+def _bad_mutation_lines(output: str) -> list[str]:
+    """Return mutation results that make the quality gate fail."""
+    return [
+        line.strip()
+        for line in output.splitlines()
+        if any(line.rstrip().endswith(status) for status in BAD_STATUSES)
+    ]
 
 
 def main() -> int:
@@ -20,11 +29,7 @@ def main() -> int:
         print(output, file=sys.stderr, end="\n" if output else "")
         return result.returncode
 
-    failures = [
-        line.strip()
-        for line in output.splitlines()
-        if any(line.rstrip().endswith(status) for status in BAD_STATUSES)
-    ]
+    failures = _bad_mutation_lines(output)
     if failures:
         print("mutation gate failed:", file=sys.stderr)
         print("\n".join(failures), file=sys.stderr)

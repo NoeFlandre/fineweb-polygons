@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -21,6 +23,18 @@ class FakeSegmenter:
         self.calls.append(texts)
         start = sum(len(batch) for batch in self.calls[:-1])
         return tuple(self.results[start : start + len(texts)])
+
+
+@pytest.fixture(autouse=True)
+def _stub_native_onnxruntime_for_unit_tests(monkeypatch) -> None:
+    """Keep V7 unit tests away from native ONNX Runtime initialization."""
+    monkeypatch.setitem(
+        sys.modules,
+        "onnxruntime",
+        SimpleNamespace(
+            get_available_providers=lambda: ("UnsupportedExecutionProvider",)
+        ),
+    )
 
 
 def _write_v6_input(path: Path) -> list[dict[str, str | int]]:

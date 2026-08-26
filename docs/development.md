@@ -3,20 +3,26 @@
 ## Setup
 
 ```bash
-export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache"
-export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons"
+export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-cleanup"
+export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v8"
 uv sync --locked
 uv run pre-commit install
 ```
 
 Keep raw and generated data on `/Volumes/Seagate M3/projects/fineweb-polygons`. Do not copy PBF, Parquet, JSONL, database, or run-output files into this checkout.
 
+The [dataset catalog](dataset-catalog.md) is the index for public V1–V9 files.
+Each version keeps its own standalone README and manifest paths. Historical
+files are immutable; use a new version and output path for a changed contract.
+The Seagate cleanup archive is recoverable and records SHA-256 values in
+`archive/legacy/2026-08-26/move-manifest.json`.
+
 ## V1 shard scan
 
 The first V1 input is FineWeb's `sample/10BT/000_00000.parquet` shard. Keep the Hugging Face cache on the Seagate and download only that file:
 
 ```bash
-export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/.hf"
+export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
 hf download HuggingFaceFW/fineweb \
   --repo-type dataset \
   --include "sample/10BT/000_00000.parquet" \
@@ -29,7 +35,7 @@ Run the resumable scan with:
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
-  --run-id v1-10bt-000-v2
+  --run-id v1-10bt-000-v3
 ```
 
 V1 keeps only named polygon profiles. A match requires the normalized name in `text` or `url`, plus `Monaco` or `Principality of Monaco` in `text` or `url`; matching both fields is not required. The default checkpoint covers 32 row groups, so the scanner opens the shard once per checkpoint and can resume after an interruption.
@@ -96,7 +102,6 @@ V7 is a post-processing step over the two V6 artifacts. Install the locked
 `wtpsplit[onnx-cpu]` dependency and keep the model cache on the Seagate:
 
 ```bash
-export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7"
 export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
 export TRANSFORMERS_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/transformers"
 

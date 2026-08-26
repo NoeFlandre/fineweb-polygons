@@ -64,6 +64,8 @@ configs:
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
+The [public dataset catalog](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json) maps every immutable V1–V9 file to its country split, standalone version README, and reproducibility manifest. The readable [GitHub catalog](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md) and [HF metadata README](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/README.md) link back to both projects.
+
 FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V9 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
@@ -278,9 +280,9 @@ positions away.
 Keep the Hugging Face cache, virtual environment, raw data, and run outputs on the Seagate:
 
 ```bash
-export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/.hf"
-export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/.uv-cache"
-export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons"
+export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
+export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-cleanup"
+export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v8"
 
 uv sync --locked
 hf download HuggingFaceFW/fineweb \
@@ -291,12 +293,12 @@ hf download HuggingFaceFW/fineweb \
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
-  --run-id v1-10bt-000-v2
+  --run-id v1-10bt-000-v3
 
 uv run fineweb-polygons scan \
   --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
-  --run-id v2-10bt-000-v1 \
+  --run-id v2-10bt-000-v2 \
   --retrieval-version v2
 
 uv run fineweb-polygons scan \
@@ -336,7 +338,7 @@ V7 sentence segmentation reads those V6 artifacts and writes new artifacts;
 all paths below remain on the Seagate:
 
 ```bash
-export HF_HOME="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7"
+export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
 
 uv run fineweb-polygons segment-v7 \
   --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \

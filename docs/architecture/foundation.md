@@ -11,7 +11,8 @@ The repository contains code, tests, configuration, documentation, and small met
 ├── raw/          # immutable source inputs, including Monaco OSM extracts
 ├── runs/         # manifests, checkpoints, and V5 frequency artifacts
 ├── logs/         # run logs and diagnostics
-└── artifacts/    # generated, reviewable outputs, including V7/V8 results
+├── artifacts/    # generated, reviewable outputs, including V7/V8/V9 results
+└── archive/      # dated, hash-recorded legacy items; nothing is deleted
 ```
 
 `ProjectPaths` is the only current code surface for this layout. It accepts an environment override for tests and controlled deployments, while defaulting to the Seagate path. The repository must never silently fall back to a local data directory.
@@ -26,6 +27,22 @@ text. The artifact records the shard fingerprint, base polygon profiles, OSM
 counts, FineWeb document counts, and the 0.1% cutoff. A matching artifact is
 reused on restart. Raw inputs, checkpoints, logs, and results remain below the
 configured Seagate data root.
+
+## Code organization
+
+The runner and V9 modules are stable compatibility façades. Their value objects
+live in focused modules so orchestration can evolve without changing imports:
+
+- `run_models.py` owns scan configuration, summaries, partition identities, run
+  layout, and profile preparation records.
+- `runs.py` owns scan orchestration, matching wiring, checkpoints, and frequency
+  processing while re-exporting the historical runner names.
+- `v9_models.py` owns V9 configuration, summaries, and output counters.
+- `v9.py` owns V9 decoding, evidence selection, serialization, and manifest
+  coordination while re-exporting the historical V9 names.
+
+This boundary is intentionally small: it reduces coupling without introducing
+a new abstraction layer into the retrieval rules.
 
 ## V2 profile and matching contract
 

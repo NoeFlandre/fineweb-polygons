@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "catalog_date": "2026-08-26",
+  "dataset": {
+    "id": "NoeFlandre/fineweb-polygons",
+    "license": "odc-by",
+    "visibility": "public",
+    "github": "https://github.com/NoeFlandre/fineweb-polygons",
+    "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
+    "fineweb_source": "HuggingFaceFW/fineweb sample/10BT/000_00000.parquet"
+  },
+  "immutability": {
+    "historical_paths_are_immutable": true,
+    "rule": "A changed retrieval or output contract receives a new version identifier and path.",
+    "raw_data_policy": "Raw FineWeb, OSM PBF, model caches, manifests, logs, and run checkpoints stay on the Seagate project volume."
+  },
+  "shared_source": {
+    "fineweb_shard": "sample/10BT/000_00000.parquet",
+    "countries": [
+      "Monaco",
+      "Liechtenstein"
+    ],
+    "data_scope": "The public files contain filtered evidence records from the tiny first shard, not the raw FineWeb shard."
+  },
+  "versions": [
+    {
+      "id": "v1",
+      "kind": "retrieval",
+      "countries": ["Monaco"],
+      "source_version": null,
+      "data_files": [
+        {"split": "train", "path": "data/v1/monaco-v1-10bt-000-v3.jsonl"}
+      ],
+      "manifest_files": ["metadata/v1/monaco-manifest.json"],
+      "readme": "data/v1/README.md",
+      "schema_summary": "Original excerpt-only release with text_excerpt and url_excerpt."
+    },
+    {
+      "id": "v2",
+      "kind": "retrieval",
+      "countries": ["Monaco"],
+      "source_version": null,
+      "data_files": [
+        {"split": "train", "path": "data/v2/monaco-v2-10bt-000-v2.jsonl"}
+      ],
+      "manifest_files": ["metadata/v2/monaco-manifest.json"],
+      "readme": "data/v2/README.md",
+      "schema_summary": "Full FineWeb text and URL with meaningful in-boundary polygon matching."
+    },
+    {
+      "id": "v3",
+      "kind": "retrieval",
+      "countries": ["Monaco"],
+      "source_version": null,
+      "data_files": [
+        {"split": "train", "path": "data/v3/monaco-v3-10bt-000-v1.jsonl"}
+      ],
+      "manifest_files": ["metadata/v3/monaco-manifest.json"],
+      "readme": "data/v3/README.md",
+      "schema_summary": "All meaningful polygon areas with strict URL-and-text matching."
+    },
+    {
+      "id": "v4",
+      "kind": "retrieval",
+      "countries": ["Monaco"],
+      "source_version": null,
+      "data_files": [
+        {"split": "train", "path": "data/v4/monaco-v4-10bt-000-v1.jsonl"}
+      ],
+      "manifest_files": ["metadata/v4/monaco-manifest.json"],
+      "readme": "data/v4/README.md",
+      "schema_summary": "All meaningful polygon areas with text-only matching."
+    },
+    {
+      "id": "v5",
+      "kind": "retrieval",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": null,
+      "data_files": [
+        {"split": "monaco", "path": "data/v5/monaco-v5-10bt-000-v3.jsonl"},
+        {"split": "liechtenstein", "path": "data/v5/liechtenstein-v5-10bt-000-v2.jsonl"}
+      ],
+      "manifest_files": [
+        "metadata/v5/monaco/manifest.json",
+        "metadata/v5/monaco/name-frequency.json",
+        "metadata/v5/liechtenstein/manifest.json",
+        "metadata/v5/liechtenstein/name-frequency.json"
+      ],
+      "readme": "data/v5/README.md",
+      "schema_summary": "V4-style text matching plus OSM uniqueness and a 0.1% FineWeb name-frequency cutoff."
+    },
+    {
+      "id": "v6",
+      "kind": "retrieval",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": null,
+      "data_files": [
+        {"split": "monaco", "path": "data/v6/monaco-v6-10bt-000-v1.jsonl"},
+        {"split": "liechtenstein", "path": "data/v6/liechtenstein-v6-10bt-000-v1.jsonl"}
+      ],
+      "manifest_files": [
+        "metadata/v6/monaco/manifest.json",
+        "metadata/v6/monaco/name-frequency.json",
+        "metadata/v6/liechtenstein/manifest.json",
+        "metadata/v6/liechtenstein/name-frequency.json"
+      ],
+      "readme": "data/v6/README.md",
+      "schema_summary": "V5 plus a 500 normalized-character name/country span limit and two matching-sentence columns."
+    },
+    {
+      "id": "v7",
+      "kind": "post_processing",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": "v6",
+      "data_files": [
+        {"split": "monaco", "path": "data/v7/monaco-v7-10bt-000-v1-sentences.jsonl"},
+        {"split": "liechtenstein", "path": "data/v7/liechtenstein-v7-10bt-000-v1-sentences.jsonl"}
+      ],
+      "manifest_files": [
+        "metadata/v7/monaco/manifest.json",
+        "metadata/v7/liechtenstein/manifest.json"
+      ],
+      "readme": "data/v7/README.md",
+      "schema_summary": "V6 rows plus an ordered, source-reconstructing sentences list from sat-3l-sm."
+    },
+    {
+      "id": "v8",
+      "kind": "post_processing",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": "v7",
+      "data_files": [
+        {"split": "monaco", "path": "data/v8/monaco-v8-10bt-000-v1-topic.jsonl"},
+        {"split": "liechtenstein", "path": "data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl"}
+      ],
+      "manifest_files": [
+        "metadata/v8/monaco-manifest.json",
+        "metadata/v8/liechtenstein-manifest.json",
+        "metadata/v8/v8-topic-vocabulary-v1.json"
+      ],
+      "readme": "data/v8/README.md",
+      "schema_summary": "V7 rows whose complete text contains at least one of the 136 approved strong topic terms."
+    },
+    {
+      "id": "v9",
+      "kind": "post_processing",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": "v8",
+      "data_files": [
+        {"split": "monaco", "path": "data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl"},
+        {"split": "liechtenstein", "path": "data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl"}
+      ],
+      "manifest_files": [
+        "metadata/v9/monaco/manifest.json",
+        "metadata/v9/liechtenstein/manifest.json"
+      ],
+      "readme": "data/v9/README.md",
+      "schema_summary": "V8 rows plus relevant_sentences and aligned metadata for topic sentences within two sentence positions of polygon evidence."
+    }
+  ]
+}
