@@ -46,6 +46,11 @@ def _write_v8_input(path: Path) -> list[dict[str, object]]:
             "polygon_id": "way/1",
             "polygon_name": "Fontvieille",
             "context_phrase": "Monaco",
+            "context_fields": ["text"],
+            "country_name_sentence": "Fontvieille is in Monaco.",
+            "matched_fields": ["text"],
+            "matched_name": "Fontvieille",
+            "polygon_name_sentence": "Fontvieille is in Monaco.",
             "text": (
                 "Fontvieille is in Monaco. "
                 "The Coastal park has a forest. "
@@ -100,7 +105,7 @@ def _config(tmp_path: Path) -> V9RunConfig:
     )
 
 
-def test_run_v9_keeps_local_topic_sentences_and_preserves_v8_fields(
+def test_run_v9_keeps_local_topic_sentences_and_selected_v8_fields(
     tmp_path: Path,
 ) -> None:
     config = _config(tmp_path)
@@ -116,6 +121,14 @@ def test_run_v9_keeps_local_topic_sentences_and_preserves_v8_fields(
     manifest = json.loads(config.manifest_path.read_text(encoding="utf-8"))
     relevant = output_rows[0]["relevant_sentences"]
     relevant_metadata = output_rows[0]["relevant_sentence_metadata"]
+    removed_v9_fields = {
+        "context_fields",
+        "context_phrase",
+        "country_name_sentence",
+        "matched_fields",
+        "matched_name",
+        "polygon_name_sentence",
+    }
 
     assert summary.rows_processed == 3
     assert summary.rows_kept == 1
@@ -129,6 +142,7 @@ def test_run_v9_keeps_local_topic_sentences_and_preserves_v8_fields(
     }
     assert output_rows[0]["text"] == source_rows[0]["text"]
     assert output_rows[0]["sentences"] == source_rows[0]["sentences"]
+    assert removed_v9_fields.isdisjoint(output_rows[0])
     assert output_rows[0]["topic_sentence_count"] == 1
     assert output_rows[0]["topic_terms"] == ["coastal", "park", "forest"]
     assert output_rows[0]["topic_categories"] == [
@@ -156,7 +170,7 @@ def test_run_v9_keeps_local_topic_sentences_and_preserves_v8_fields(
     assert manifest["version"] == "v9"
     assert manifest["source_version"] == "v8"
     assert manifest["status"] == "complete"
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
     assert manifest["context_window"] == 2
     assert manifest["matching"] == {
         "place_anchor": "polygon_name in exact normalized sentence text",
@@ -522,7 +536,7 @@ def test_v9_manifest_matching_rejects_each_source_or_setting_change(
 
     assert v9_module._manifest_matches(manifest, **kwargs) is True
     mutations = (
-        ("schema_version", 3),
+        ("schema_version", 2),
         ("version", "v8"),
         ("source_version", "v7"),
         ("status", "incomplete"),

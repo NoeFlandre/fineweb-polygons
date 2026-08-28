@@ -16,7 +16,7 @@ its data and a manifest or metadata file describing its inputs and settings.
 | V6 | Retrieval | Monaco, Liechtenstein | V5 plus a 500 normalized-character name/country limit and sentence evidence columns. |
 | V7 | Post-processing | Monaco, Liechtenstein | Splits each V6 full text with `sat-3l-sm` and verifies exact reconstruction. |
 | V8 | Post-processing | Monaco, Liechtenstein | Keeps V7 documents containing at least one of 136 strong topic terms. |
-| V9 | Post-processing | Monaco, Liechtenstein | Keeps V8 topic sentences within two sentence positions of polygon-name evidence. |
+| V9 | Post-processing | Monaco, Liechtenstein | Keeps V8 topic sentences within two sentence positions of polygon-name evidence; publishes compact schema version 3 without six redundant V6 matching fields. |
 
 ## How to inspect a release
 

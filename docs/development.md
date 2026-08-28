@@ -143,10 +143,13 @@ HF metadata for reproducibility.
 ## V9 local sentence-topic filtering
 
 V9 reads the V8 artifacts and keeps only vocabulary-matching sentences within
-two sentence positions of polygon-name evidence. It preserves the full V8 row
-and adds a text-only `relevant_sentences` list plus an aligned
-`relevant_sentence_metadata` list. The V8 vocabulary remains the single source
-of topic terms. This is V9 output schema version 2; selection is unchanged:
+two sentence positions of polygon-name evidence. It preserves the full text,
+URL, sentence list, and compact topic evidence, then adds a text-only
+`relevant_sentences` list plus an aligned `relevant_sentence_metadata` list.
+The V8 vocabulary remains the single source of topic terms. V9 output schema
+version 3 removes the redundant `context_fields`, `context_phrase`,
+`country_name_sentence`, `matched_fields`, `matched_name`, and
+`polygon_name_sentence` row fields; selection is unchanged:
 
 ```bash
 uv run fineweb-polygons filter-v9 \

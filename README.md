@@ -139,7 +139,7 @@ and skips the frequency pass.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 filters already selected V7 documents with a fixed topic vocabulary at document level. V9 filters V8 sentences with the same vocabulary near polygon-name evidence; it does not add new polygon names or run an LLM. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 filters already selected V7 documents with a fixed topic vocabulary at document level. V9 filters V8 sentences with the same vocabulary near polygon-name evidence; it does not add new polygon names or run an LLM. V9 publishes the full text, sentence list, URL, and compact topic evidence, while omitting redundant V6 matching fields from its rows. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
 
 ## Public tiny-shard artifacts
 
@@ -267,7 +267,12 @@ index, matched terms, matched categories, topic counts, and polygon/country
 sentence distances without repeating the sentence text. Rows with no local
 topic sentence are filtered. The output and manifest are atomic and reusable
 when the V8 input, vocabulary, settings, and result hash match.
-This is V9 output schema version 2; the selection rule is unchanged.
+This is V9 output schema version 3; the selection rule is unchanged. V9 rows
+omit `context_fields`, `context_phrase`,
+`country_name_sentence`, `matched_fields`,
+`matched_name`, and `polygon_name_sentence` columns. The
+internal V8 `context_phrase` input remains an anchor used to validate the
+existing V8 sentence list; it is not published in V9 rows.
 
 On the first shard, V9 kept 29 of 39 Monaco V8 rows and wrote 93 relevant
 sentences. It kept 4 of 6 Liechtenstein V8 rows and wrote 9 relevant sentences.

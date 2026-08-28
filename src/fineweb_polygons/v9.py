@@ -46,7 +46,18 @@ __all__ = [
 
 V9_VERSION = "v9"
 V9_SOURCE_VERSION = "v8"
-V9_SCHEMA_VERSION = 2
+V9_SCHEMA_VERSION = 3
+
+_V9_REMOVED_OUTPUT_FIELDS = frozenset(
+    (
+        "context_fields",
+        "context_phrase",
+        "country_name_sentence",
+        "matched_fields",
+        "matched_name",
+        "polygon_name_sentence",
+    )
+)
 
 
 def run_v9(
@@ -181,7 +192,9 @@ def _enriched_row(
     )
     if not relevant:
         return None
-    output_row = dict(row)
+    output_row = {
+        key: value for key, value in row.items() if key not in _V9_REMOVED_OUTPUT_FIELDS
+    }
     output_row.update(_sentence_columns(relevant))
     output_row["topic_sentence_count"] = len(relevant)
     output_row["topic_terms"] = list(_row_terms(relevant))

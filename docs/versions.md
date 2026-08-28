@@ -185,20 +185,26 @@ document.
 - Require the sentence to be within two sentence positions of a sentence that
   contains the polygon name, using the same case-insensitive normalized exact
   matching as earlier versions.
-- Preserve the complete `text`, the original ordered `sentences`, and every
-  V8 field. Add `relevant_sentences`, a list containing only selected sentence
-  strings. Add the aligned `relevant_sentence_metadata` list containing the
-  original index, matched terms, matched categories, topic counts, and
-  polygon/country sentence distances, without repeating sentence text.
+- Preserve the complete `text`, the URL, the original ordered `sentences`, and
+  the useful V8 evidence fields. Add `relevant_sentences`, a list containing
+  only selected sentence strings. Add the aligned
+  `relevant_sentence_metadata` list containing the original index, matched
+  terms, matched categories, topic counts, and polygon/country sentence
+  distances, without repeating sentence text.
 - Filter a document when it has no qualifying local topic sentence.
 - Keep the configured country as an audit anchor. V8 already guarantees the
   polygon and country are within 500 normalized characters in the document.
 - Record source, result, vocabulary, context-window, count, and matching
   settings in the manifest. Atomic output and matching hashes make a completed
   run reusable.
-- The current V9 output schema is version 2: `relevant_sentences` is text-only,
+- Omit these redundant legacy V6 row fields from V9: `context_fields`,
+  `context_phrase`, `country_name_sentence`, `matched_fields`, `matched_name`,
+  and `polygon_name_sentence`. V9 still reads the V8 `context_phrase` input
+  internally as the country anchor.
+- The current V9 output schema is version 3: `relevant_sentences` is text-only,
   while `relevant_sentence_metadata` contains the aligned per-sentence
-  metadata. This changes presentation only, not selection.
+  metadata. Removing redundant row fields changes the published schema only,
+  not selection.
 
 The public V9 paths are:
 
