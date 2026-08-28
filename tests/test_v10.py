@@ -832,6 +832,9 @@ class _FakeNativeTokenizer:
     eos_token = "eos"
     decoded_outputs: ClassVar[list[str]] = ["yes", "<think>reason</think>no"]
     pretrained_args: ClassVar[list[tuple[object, dict[str, object]]]] = []
+    chat_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
+    encode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
+    decode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
 
     @classmethod
     def from_pretrained(cls, path, **kwargs):
@@ -839,12 +842,15 @@ class _FakeNativeTokenizer:
         return cls()
 
     def apply_chat_template(self, messages, **kwargs):
+        self.chat_calls.append((messages, dict(kwargs)))
         return "rendered"
 
     def __call__(self, prompts, **kwargs):
+        self.encode_calls.append((list(prompts), dict(kwargs)))
         return _FakeEncoded(input_ids=_FakeTensor())
 
     def batch_decode(self, generated, **kwargs):
+        self.decode_calls.append((generated, dict(kwargs)))
         return self.decoded_outputs
 
 
@@ -885,11 +891,37 @@ def test_v10_native_classifier_uses_chat_template_and_greedy_generation(
     )
 
     _FakeNativeTokenizer.pretrained_args = []
+    _FakeNativeTokenizer.chat_calls = []
+    _FakeNativeTokenizer.encode_calls = []
+    _FakeNativeTokenizer.decode_calls = []
     _FakeNativeModel.pretrained_args = []
     _FakeTorch.backends.mps.available = True
     classifier = LfmSentenceClassifier(model_path, max_new_tokens=1)
     assert classifier.classify(["first", "second"]) == ("yes", "no")
     assert classifier.classify([]) == ()
+    assert [call[0][0]["content"] for call in _FakeNativeTokenizer.chat_calls] == [
+        format_prompt("first"),
+        format_prompt("second"),
+    ]
+    assert _FakeNativeTokenizer.encode_calls == [
+        (
+            ["rendered</think>", "rendered</think>"],
+            {
+                "return_tensors": "pt",
+                "padding": True,
+                "truncation": False,
+            },
+        )
+    ]
+    assert _FakeNativeTokenizer.decode_calls == [
+        (
+            (slice(None), slice(4, None, None)),
+            {
+                "skip_special_tokens": True,
+                "clean_up_tokenization_spaces": False,
+            },
+        )
+    ]
     assert _FakeNativeTokenizer.pretrained_args == [
         (str(model_path), {"local_files_only": True})
     ]
@@ -930,7 +962,10 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
     calls = []
 
     class Tokenizer:
+        messages: ClassVar[list] = []
+
         def apply_chat_template(self, messages, **kwargs):
+            self.messages.append((messages, kwargs))
             return [1]
 
         def encode(self, text):
@@ -954,6 +989,10 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
 
     assert classifier.classify(["first", "second"]) == ("yes", "no")
     assert classifier.classify([]) == ()
+    assert [call[0][0]["content"] for call in Tokenizer.messages] == [
+        format_prompt("first"),
+        format_prompt("second"),
+    ]
     assert load_calls == [str(model_path)]
     assert calls[0][3] == {"max_tokens": 11, "verbose": False}
 
@@ -1006,8 +1045,9 @@ def test_v10_model_wrappers_validate_model_path_and_token_limit(
         factory(tmp_path / "missing")
     model_path = tmp_path / factory.__name__
     model_path.mkdir()
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(ValueError) as error:
         factory(model_path, max_new_tokens=0)
+    assert str(error.value) == message
 
 
 def test_v10_lazy_runtime_loaders_report_missing_optional_dependencies(
@@ -1017,8 +1057,11 @@ def test_v10_lazy_runtime_loaders_report_missing_optional_dependencies(
         raise ImportError(name)
 
     monkeypatch.setattr(inference_module.importlib, "import_module", missing_import)
-    with pytest.raises(RuntimeError, match="torch and transformers"):
+    with pytest.raises(RuntimeError) as error:
         inference_module._load_transformers()
+    assert str(error.value) == (
+        "V10 requires torch and transformers in the model runtime"
+    )
     with pytest.raises(RuntimeError) as error:
         inference_module._load_mlx()
     assert str(error.value) == "V10 MLX inference requires the mlx-lm package"

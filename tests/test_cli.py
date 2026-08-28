@@ -847,7 +847,9 @@ def test_cli_reports_v10_runner_errors_to_stderr(tmp_path: Path, capsys) -> None
     assert captured.err == "error: bad V10 input\n"
 
 
-def test_cli_v10_serialization_is_utf8_and_sorted(tmp_path: Path, capsys) -> None:
+def test_cli_v10_serialization_is_utf8_and_sorted(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
     data_root = tmp_path / "external"
     result_path = data_root / "résultats" / "v10.jsonl"
     manifest_path = data_root / "runs" / "v10" / "manifest.json"
@@ -866,6 +868,16 @@ def test_cli_v10_serialization_is_utf8_and_sorted(tmp_path: Path, capsys) -> Non
             no_sentences=2,
             result_sha256="result-sha",
         )
+
+    dumps_calls = []
+
+    class JsonProxy:
+        @staticmethod
+        def dumps(value, **kwargs):
+            dumps_calls.append(kwargs)
+            return json.dumps(value, **kwargs)
+
+    monkeypatch.setattr(cli_module, "json", JsonProxy)
 
     assert (
         main(
@@ -904,6 +916,7 @@ def test_cli_v10_serialization_is_utf8_and_sorted(tmp_path: Path, capsys) -> Non
     assert capsys.readouterr().out == (
         json.dumps(expected, ensure_ascii=False, sort_keys=True) + "\n"
     )
+    assert dumps_calls[-1] == {"ensure_ascii": False, "sort_keys": True}
 
 
 def test_cli_runs_v9_sentence_topic_filter_and_serializes_its_summary(
