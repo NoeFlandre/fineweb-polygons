@@ -145,7 +145,8 @@ HF metadata for reproducibility.
 V9 reads the V8 artifacts and keeps only vocabulary-matching sentences within
 two sentence positions of polygon-name evidence. It preserves the full text,
 URL, sentence list, and compact topic evidence, then adds a text-only
-`relevant_sentences` list plus an aligned `relevant_sentence_metadata` list.
+`sentences_with_topic_term` list plus an aligned `relevant_sentence_metadata`
+list.
 The V8 vocabulary remains the single source of topic terms. V9 output schema
 version 3 removes the redundant `context_fields`, `context_phrase`,
 `country_name_sentence`, `matched_fields`, `matched_name`, and
@@ -171,7 +172,7 @@ V9 keeps a sentence only when it has a whole-word topic match and the polygon
 name occurs in the same sentence or within two sentence positions. The country
 distance is saved for audit; it is not a second sentence-level gate because V8
 already applied the document-level 500-character name/country rule. The
-metadata list is aligned with `relevant_sentences` by position.
+metadata list is aligned with `sentences_with_topic_term` by position.
 
 ## Red-green-refactor
 

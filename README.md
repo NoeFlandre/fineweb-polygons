@@ -261,13 +261,13 @@ long document as evidence. The country remains an audit anchor; V8 has already
 required the polygon name and country to be within 500 normalized characters.
 
 V9 preserves the complete `text` and original `sentences` list, then adds
-`relevant_sentences` as a plain list of sentence strings for quick review.
-The aligned `relevant_sentence_metadata` list stores the original sentence
+`sentences_with_topic_term` as a plain list of sentence strings for quick
+review. The aligned `relevant_sentence_metadata` list stores the original sentence
 index, matched terms, matched categories, topic counts, and polygon/country
 sentence distances without repeating the sentence text. Rows with no local
 topic sentence are filtered. The output and manifest are atomic and reusable
 when the V8 input, vocabulary, settings, and result hash match.
-This is V9 output schema version 3; the selection rule is unchanged. V9 rows
+This is V9 output schema version 4; the selection rule is unchanged. V9 rows
 omit `context_fields`, `context_phrase`,
 `country_name_sentence`, `matched_fields`,
 `matched_name`, and `polygon_name_sentence` columns. The

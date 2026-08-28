@@ -186,7 +186,7 @@ document.
   contains the polygon name, using the same case-insensitive normalized exact
   matching as earlier versions.
 - Preserve the complete `text`, the URL, the original ordered `sentences`, and
-  the useful V8 evidence fields. Add `relevant_sentences`, a list containing
+  the useful V8 evidence fields. Add `sentences_with_topic_term`, a list of
   only selected sentence strings. Add the aligned
   `relevant_sentence_metadata` list containing the original index, matched
   terms, matched categories, topic counts, and polygon/country sentence
@@ -201,7 +201,7 @@ document.
   `context_phrase`, `country_name_sentence`, `matched_fields`, `matched_name`,
   and `polygon_name_sentence`. V9 still reads the V8 `context_phrase` input
   internally as the country anchor.
-- The current V9 output schema is version 3: `relevant_sentences` is text-only,
+- The current V9 output schema is version 4: `sentences_with_topic_term` is text-only,
   while `relevant_sentence_metadata` contains the aligned per-sentence
   metadata. Removing redundant row fields changes the published schema only,
   not selection.

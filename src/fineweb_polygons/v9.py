@@ -46,7 +46,7 @@ __all__ = [
 
 V9_VERSION = "v9"
 V9_SOURCE_VERSION = "v8"
-V9_SCHEMA_VERSION = 3
+V9_SCHEMA_VERSION = 4
 
 _V9_REMOVED_OUTPUT_FIELDS = frozenset(
     (
@@ -206,7 +206,7 @@ def _sentence_columns(
     relevant: Sequence[Mapping[str, object]],
 ) -> dict[str, object]:
     return {
-        "relevant_sentences": [evidence["sentence"] for evidence in relevant],
+        "sentences_with_topic_term": [evidence["sentence"] for evidence in relevant],
         "relevant_sentence_metadata": [
             {key: value for key, value in evidence.items() if key != "sentence"}
             for evidence in relevant

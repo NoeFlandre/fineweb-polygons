@@ -133,7 +133,7 @@
       ],
       "manifest_files": ["metadata/v9/monaco/manifest.json", "metadata/v9/liechtenstein/manifest.json"],
       "readme": "data/v9/README.md",
-      "schema_summary": "V9 schema version 3: V8 topic sentences within two sentence positions of polygon evidence, with full text and compact aligned metadata; six redundant V6 matching fields are omitted from rows."
+      "schema_summary": "V9 schema version 4: V8 topic sentences within two sentence positions of polygon evidence, with full text and compact aligned metadata; six redundant V6 matching fields are omitted from rows."
     }
   ]
 }

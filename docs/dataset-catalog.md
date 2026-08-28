@@ -16,7 +16,7 @@ its data and a manifest or metadata file describing its inputs and settings.
 | V6 | Retrieval | Monaco, Liechtenstein | V5 plus a 500 normalized-character name/country limit and sentence evidence columns. |
 | V7 | Post-processing | Monaco, Liechtenstein | Splits each V6 full text with `sat-3l-sm` and verifies exact reconstruction. |
 | V8 | Post-processing | Monaco, Liechtenstein | Keeps V7 documents containing at least one of 136 strong topic terms. |
-| V9 | Post-processing | Monaco, Liechtenstein | Keeps V8 topic sentences within two sentence positions of polygon-name evidence; publishes compact schema version 3 without six redundant V6 matching fields. |
+| V9 | Post-processing | Monaco, Liechtenstein | Keeps V8 topic sentences within two sentence positions of polygon-name evidence; publishes compact schema version 4 without six redundant V6 matching fields. |
 
 ## How to inspect a release
 
@@ -24,7 +24,7 @@ its data and a manifest or metadata file describing its inputs and settings.
 2. Open its `metadata/` manifest for source fingerprints, settings, counts, and
    result hashes.
 3. Use the HF viewer on the JSONL file to inspect the structured columns. V9’s
-   `relevant_sentences` column is the quickest human-review entry point.
+   `sentences_with_topic_term` column is the quickest human-review entry point.
 
 The files are filtered evidence from the first FineWeb 10BT shard. Raw FineWeb,
 OSM PBFs, model caches, checkpoints, and logs remain on the Seagate project

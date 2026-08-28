@@ -119,7 +119,7 @@ def test_run_v9_keeps_local_topic_sentences_and_selected_v8_fields(
         for line in config.output_path.read_text(encoding="utf-8").splitlines()
     ]
     manifest = json.loads(config.manifest_path.read_text(encoding="utf-8"))
-    relevant = output_rows[0]["relevant_sentences"]
+    relevant = output_rows[0]["sentences_with_topic_term"]
     relevant_metadata = output_rows[0]["relevant_sentence_metadata"]
     removed_v9_fields = {
         "context_fields",
@@ -143,6 +143,7 @@ def test_run_v9_keeps_local_topic_sentences_and_selected_v8_fields(
     assert output_rows[0]["text"] == source_rows[0]["text"]
     assert output_rows[0]["sentences"] == source_rows[0]["sentences"]
     assert removed_v9_fields.isdisjoint(output_rows[0])
+    assert "relevant_sentences" not in output_rows[0]
     assert output_rows[0]["topic_sentence_count"] == 1
     assert output_rows[0]["topic_terms"] == ["coastal", "park", "forest"]
     assert output_rows[0]["topic_categories"] == [
@@ -170,7 +171,7 @@ def test_run_v9_keeps_local_topic_sentences_and_selected_v8_fields(
     assert manifest["version"] == "v9"
     assert manifest["source_version"] == "v8"
     assert manifest["status"] == "complete"
-    assert manifest["schema_version"] == 3
+    assert manifest["schema_version"] == 4
     assert manifest["context_window"] == 2
     assert manifest["matching"] == {
         "place_anchor": "polygon_name in exact normalized sentence text",
@@ -536,7 +537,7 @@ def test_v9_manifest_matching_rejects_each_source_or_setting_change(
 
     assert v9_module._manifest_matches(manifest, **kwargs) is True
     mutations = (
-        ("schema_version", 2),
+        ("schema_version", 3),
         ("version", "v8"),
         ("source_version", "v7"),
         ("status", "incomplete"),
