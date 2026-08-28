@@ -12,6 +12,7 @@ from fineweb_polygons.runs import RunSummary
 from fineweb_polygons.v7 import V7RunSummary
 from fineweb_polygons.v8 import V8RunSummary
 from fineweb_polygons.v9 import V9RunSummary
+from fineweb_polygons.v10 import V10RunSummary
 
 
 def test_cli_reports_foundation_only(capsys) -> None:
@@ -642,6 +643,162 @@ def test_cli_v9_reports_runner_errors_to_stderr(tmp_path: Path, capsys) -> None:
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "error: bad V9 input\n"
+
+
+def test_cli_parser_exposes_the_v10_model_filter_command() -> None:
+    parser = _build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "filter-v10",
+            "--input",
+            "v9.jsonl",
+            "--output",
+            "v10.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--model-path",
+            "model",
+            "--checkpoint",
+            "checkpoint.jsonl",
+            "--batch-size",
+            "4",
+            "--max-new-tokens",
+            "3",
+        ]
+    )
+
+    assert parsed.command == "filter-v10"
+    assert parsed.data_root == DEFAULT_DATA_ROOT
+    assert parsed.input == Path("v9.jsonl")
+    assert parsed.output == Path("v10.jsonl")
+    assert parsed.manifest == Path("manifest.json")
+    assert parsed.model_path == Path("model")
+    assert parsed.checkpoint == Path("checkpoint.jsonl")
+    assert parsed.batch_size == 4
+    assert parsed.max_new_tokens == 3
+    defaults = parser.parse_args(
+        [
+            "filter-v10",
+            "--input",
+            "v9.jsonl",
+            "--output",
+            "v10.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--model-path",
+            "model",
+        ]
+    )
+    assert defaults.max_new_tokens == 512
+
+
+def test_cli_runs_v10_and_serializes_its_summary(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "external"
+    captured = {}
+
+    def fake_runner(config):
+        captured["config"] = config
+        return V10RunSummary(
+            output_path=data_root / "artifacts" / "v10.jsonl",
+            manifest_path=data_root / "runs" / "v10" / "manifest.json",
+            checkpoint_path=data_root / "runs" / "v10" / "checkpoint.jsonl",
+            rows_processed=2,
+            rows_kept=1,
+            rows_filtered=1,
+            candidate_sentences_processed=3,
+            yes_sentences_written=1,
+            no_sentences=2,
+            result_sha256="result-sha",
+        )
+
+    assert (
+        main(
+            [
+                "filter-v10",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "artifacts" / "v9.jsonl"),
+                "--output",
+                str(data_root / "artifacts" / "v10.jsonl"),
+                "--manifest",
+                str(data_root / "runs" / "v10" / "manifest.json"),
+                "--model-path",
+                "/Volumes/Seagate M3/projects/models/lfm",
+                "--runtime-model-path",
+                "/Volumes/Seagate M3/projects/models/lfm-mlx",
+                "--checkpoint",
+                str(data_root / "runs" / "v10" / "checkpoint.jsonl"),
+                "--batch-size",
+                "4",
+                "--max-new-tokens",
+                "3",
+            ],
+            v10_runner=fake_runner,
+        )
+        == 0
+    )
+
+    assert captured["config"].input_path == data_root / "artifacts" / "v9.jsonl"
+    assert captured["config"].output_path == data_root / "artifacts" / "v10.jsonl"
+    assert captured["config"].manifest_path == (
+        data_root / "runs" / "v10" / "manifest.json"
+    )
+    assert captured["config"].model_path == Path(
+        "/Volumes/Seagate M3/projects/models/lfm"
+    )
+    assert captured["config"].runtime_model_path == Path(
+        "/Volumes/Seagate M3/projects/models/lfm-mlx"
+    )
+    assert captured["config"].checkpoint_path == (
+        data_root / "runs" / "v10" / "checkpoint.jsonl"
+    )
+    assert captured["config"].batch_size == 4
+    assert captured["config"].max_new_tokens == 3
+    assert json.loads(capsys.readouterr().out) == {
+        "candidate_sentences_processed": 3,
+        "checkpoint_path": str(data_root / "runs" / "v10" / "checkpoint.jsonl"),
+        "manifest_path": str(data_root / "runs" / "v10" / "manifest.json"),
+        "no_sentences": 2,
+        "output_path": str(data_root / "artifacts" / "v10.jsonl"),
+        "result_sha256": "result-sha",
+        "rows_filtered": 1,
+        "rows_kept": 1,
+        "rows_processed": 2,
+        "yes_sentences_written": 1,
+    }
+
+
+def test_cli_reports_v10_runner_errors_to_stderr(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "external"
+
+    def failing_runner(config):
+        raise ValueError("bad V10 input")
+
+    assert (
+        main(
+            [
+                "filter-v10",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v9.jsonl"),
+                "--output",
+                str(data_root / "v10.jsonl"),
+                "--manifest",
+                str(data_root / "manifest.json"),
+                "--model-path",
+                str(data_root / "model"),
+            ],
+            v10_runner=failing_runner,
+        )
+        == 2
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "error: bad V10 input\n"
 
 
 def test_cli_runs_v9_sentence_topic_filter_and_serializes_its_summary(

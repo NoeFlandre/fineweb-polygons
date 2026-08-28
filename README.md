@@ -58,15 +58,21 @@ configs:
         path: data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl
       - split: liechtenstein
         path: data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl
+  - config_name: v10
+    data_files:
+      - split: monaco
+        path: data/v10/monaco-v10-10bt-000-v1-landuse.jsonl
+      - split: liechtenstein
+        path: data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl
 ---
 
 # FineWeb Polygons
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-The [public dataset catalog](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json) maps every immutable V1–V9 file to its country split, standalone version README, and reproducibility manifest. The readable [GitHub catalog](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md) and [HF metadata README](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/README.md) link back to both projects.
+The [public dataset catalog](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json) maps every immutable V1–V10 file to its country split, standalone version README, and reproducibility manifest. The readable [GitHub catalog](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md) and [HF metadata README](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/README.md) link back to both projects.
 
-FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V9 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
+FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V10 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:
 
 `/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf`
 and `/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf`.
@@ -135,11 +141,11 @@ and skips the frequency pass.
 - Docker and MkDocs Material are configured from the start.
 - `LICENSE` and `CITATION.cff` are public project artifacts.
 - Raw input, run manifests, checkpoints, logs, and generated artifacts stay on the Seagate project volume.
-- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass. V7, V8, and V9 are content-fingerprinted, atomic post-processing runs that can reuse completed outputs.
+- V1/V2/V3/V4/V5/V6 processing is resumable in chunks of 32 Parquet row groups, appends structured JSON logs, and records input/configuration fingerprints in a manifest. V5 and V6 also checkpoint their name-frequency pass. V7, V8, and V9 are content-fingerprinted, atomic post-processing runs that can reuse completed outputs. V10 adds an append-only per-row classification checkpoint and fingerprints both model runtimes.
 - Every result is tied to an explicit retrieval version; new retrieval behavior must use a new version ID.
 - The implementation uses small, deep modules with stable interfaces and YAGNI scope.
 
-V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 filters already selected V7 documents with a fixed topic vocabulary at document level. V9 filters V8 sentences with the same vocabulary near polygon-name evidence; it does not add new polygon names or run an LLM. V9 publishes the full text, sentence list, URL, and compact topic evidence, while omitting redundant V6 matching fields from its rows. They produce evidence JSONL on the Seagate; the raw shard and model cache are never uploaded.
+V1/V2/V3/V4/V5/V6 intentionally skip aliases, fuzzy matching, embeddings, and classifiers. V7 only segments already selected V6 documents; it does not change document selection. V8 filters already selected V7 documents with a fixed topic vocabulary at document level. V9 filters V8 sentences with the same vocabulary near polygon-name evidence; it does not add new polygon names or run an LLM. V9 publishes the full text, sentence list, URL, and compact topic evidence, while omitting redundant V6 matching fields from its rows. V10 classifies V9 candidate sentences with a local LFM model and publishes only its `yes` sentences. They produce evidence JSONL on the Seagate; the raw shard, model cache, and checkpoints are never uploaded.
 
 ## Public tiny-shard artifacts
 
@@ -163,6 +169,8 @@ Hugging Face viewer.
 - V8 Liechtenstein: `data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl`
 - V9 Monaco: `data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl`
 - V9 Liechtenstein: `data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl`
+- V10 Monaco: `data/v10/monaco-v10-10bt-000-v1-landuse.jsonl`
+- V10 Liechtenstein: `data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -279,6 +287,29 @@ sentences. It kept 4 of 6 Liechtenstein V8 rows and wrote 9 relevant sentences.
 The polygon-name evidence was in the same sentence for 33 Monaco sentences and
 3 Liechtenstein sentences; the remaining matches were one or two sentence
 positions away.
+
+### V10 — local LFM land-use classification
+
+V10 is a post-processing version over the V9 candidate sentence lists. It sends
+each `sentences_with_topic_term` sentence to the local
+`LiquidAI/LFM2.5-2.6B` model with the exact V10 classification prompt. The
+prompt asks whether the sentence describes land use, land cover, geographic
+environment, or an observable proxy. The classifier must return exactly
+lowercase `yes` or `no`; any other answer stops the run instead of publishing
+an uncertain result.
+
+Only sentences classified `yes` are published. Rows with no `yes` sentences
+are removed. The public V10 rows retain polygon/document identifiers, URL,
+topic fields, the filtered `sentences_with_topic_term` list, and aligned
+`relevant_sentence_metadata`; they do not contain the original full `text`,
+the original `sentences` list, or `no` sentences. The source model snapshot,
+the Seagate-derived MLX q4 runtime used on Apple Silicon, prompt hash, source
+hash, checkpoint hash, and result hash are recorded in each manifest. The
+checkpoint is local and resumable; model files, raw data, logs, and
+checkpoints are not uploaded.
+
+On the first shard, V10 kept 21 of 29 Monaco V9 rows and wrote 62 `yes`
+sentences. It kept 3 of 4 Liechtenstein V9 rows and wrote 4 `yes` sentences.
 
 ## First-shard run
 

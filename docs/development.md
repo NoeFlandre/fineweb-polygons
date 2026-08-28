@@ -11,7 +11,7 @@ uv run pre-commit install
 
 Keep raw and generated data on `/Volumes/Seagate M3/projects/fineweb-polygons`. Do not copy PBF, Parquet, JSONL, database, or run-output files into this checkout.
 
-The [dataset catalog](dataset-catalog.md) is the index for public V1–V9 files.
+The [dataset catalog](dataset-catalog.md) is the index for public V1–V10 files.
 Each version keeps its own standalone README and manifest paths. Historical
 files are immutable; use a new version and output path for a changed contract.
 The Seagate cleanup archive is recoverable and records SHA-256 values in
@@ -148,7 +148,7 @@ URL, sentence list, and compact topic evidence, then adds a text-only
 `sentences_with_topic_term` list plus an aligned `relevant_sentence_metadata`
 list.
 The V8 vocabulary remains the single source of topic terms. V9 output schema
-version 3 removes the redundant `context_fields`, `context_phrase`,
+version 4 removes the redundant `context_fields`, `context_phrase`,
 `country_name_sentence`, `matched_fields`, `matched_name`, and
 `polygon_name_sentence` row fields; selection is unchanged:
 
@@ -173,6 +173,35 @@ name occurs in the same sentence or within two sentence positions. The country
 distance is saved for audit; it is not a second sentence-level gate because V8
 already applied the document-level 500-character name/country rule. The
 metadata list is aligned with `sentences_with_topic_term` by position.
+
+## V10 local model classification
+
+V10 reads the V9 `sentences_with_topic_term` lists and classifies every
+candidate sentence with the local `LiquidAI/LFM2.5-2.6B` model. On Apple
+Silicon, use the Seagate-derived q4 MLX runtime and the dedicated Seagate uv
+environment:
+
+```bash
+export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-v10"
+export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v10"
+
+uv run fineweb-polygons filter-v10 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
+  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v10-monaco-10bt-000-v1-landuse.jsonl" \
+  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v10-monaco-10bt-000-v1/manifest.json" \
+  --model-path "/Volumes/Seagate M3/projects/osm-polygon-web-search/.hf-hub-cache-lfm-20260828/models--LiquidAI--LFM2.5-2.6B/snapshots/654f9463ce32b05d0429d76fe1f580b27d4c1ac0" \
+  --runtime-model-path "/Volumes/Seagate M3/projects/fineweb-polygons/models/lfm2.5-2.6b-mlx-q4" \
+  --checkpoint "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v10-monaco-10bt-000-v1/checkpoint.jsonl"
+```
+
+Repeat with the Liechtenstein V9 input and V10 output paths. V10 accepts only
+exact lowercase `yes` or `no`; it publishes only `yes` sentences and removes
+rows with no `yes` result. The output contains no full text, original sentence
+list, or rejected sentence. The JSONL checkpoint is append-only and lets an
+interrupted run resume without reclassifying completed rows. The manifest
+stores the exact prompt, prompt hash, model fingerprints, runtime fingerprint,
+settings, counts, and output hash.
 
 ## Red-green-refactor
 

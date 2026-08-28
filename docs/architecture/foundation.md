@@ -11,7 +11,7 @@ The repository contains code, tests, configuration, documentation, and small met
 ├── raw/          # immutable source inputs, including Monaco OSM extracts
 ├── runs/         # manifests, checkpoints, and V5 frequency artifacts
 ├── logs/         # run logs and diagnostics
-├── artifacts/    # generated, reviewable outputs, including V7/V8/V9 results
+├── artifacts/    # generated, reviewable outputs, including V7/V8/V9/V10 results
 └── archive/      # dated, hash-recorded legacy items; nothing is deleted
 ```
 
@@ -43,6 +43,12 @@ live in focused modules so orchestration can evolve without changing imports:
 - `v9_models.py` owns V9 configuration, summaries, and output counters.
 - `v9.py` owns V9 decoding, evidence selection, serialization, and manifest
   coordination while re-exporting the historical V9 names.
+- `v10_models.py` owns V10 configuration, summaries, and the classifier
+  protocol.
+- `v10_inference.py` owns the model-runtime boundary, exact prompt rendering,
+  and strict yes/no parsing.
+- `v10.py` owns V9 candidate decoding, resumable classification checkpoints,
+  yes-only serialization, and model/prompt manifest coordination.
 
 This boundary is intentionally small: it reduces coupling without introducing
 a new abstraction layer into the retrieval rules.
@@ -86,6 +92,22 @@ in the manifest. The manifest also records matching settings, vocabulary
 categories, row counts, and category document counts. Output and manifest
 writes are atomic, and a completed run is reusable without re-reading the
 vocabulary or source rows when all fingerprints still match.
+
+## V10 model-classification contract
+
+V10 reads only V9's candidate sentence list. It never reopens the FineWeb
+shard or the OSM PBF. Every candidate is sent to the exact recorded prompt and
+the local LFM runtime. The model chat template and `</think>` assistant
+prefill are part of the reproducibility contract. A label is valid only when
+it is exactly lowercase `yes` or `no`; malformed output fails the run.
+
+The classifier writes a checkpoint record after each completed source row.
+Output order follows V9 input order even when a batch contains multiple rows.
+Only `yes` sentences are written, with aligned metadata; rows without a `yes`
+sentence are omitted. Source and runtime model fingerprints, prompt hash,
+settings, checkpoint hash, and final result hash are saved in the manifest.
+The native source model and the derived Seagate MLX q4 runtime are local
+inputs, not public dataset files.
 
 ## Logging contract
 

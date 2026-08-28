@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_date": "2026-08-26",
+  "catalog_date": "2026-08-28",
   "dataset": {
     "id": "NoeFlandre/fineweb-polygons",
     "license": "odc-by",
@@ -134,6 +134,19 @@
       "manifest_files": ["metadata/v9/monaco/manifest.json", "metadata/v9/liechtenstein/manifest.json"],
       "readme": "data/v9/README.md",
       "schema_summary": "V9 schema version 4: V8 topic sentences within two sentence positions of polygon evidence, with full text and compact aligned metadata; six redundant V6 matching fields are omitted from rows."
+    },
+    {
+      "id": "v10",
+      "kind": "post_processing",
+      "countries": ["Monaco", "Liechtenstein"],
+      "source_version": "v9",
+      "data_files": [
+        {"split": "monaco", "path": "data/v10/monaco-v10-10bt-000-v1-landuse.jsonl"},
+        {"split": "liechtenstein", "path": "data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl"}
+      ],
+      "manifest_files": ["metadata/v10/monaco/manifest.json", "metadata/v10/liechtenstein/manifest.json"],
+      "readme": "data/v10/README.md",
+      "schema_summary": "V9 candidate sentences classified by local LFM; only exact yes sentences are published, without full text or rejected sentences."
     }
   ]
 }

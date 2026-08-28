@@ -3,7 +3,7 @@
 This directory is the navigation layer for the public
 [FineWeb Polygons dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons).
 
-- [`catalog.json`](catalog.json) maps every immutable V1–V9 data path to its
+- [`catalog.json`](catalog.json) maps every immutable V1–V10 data path to its
   country/split, source version, standalone README, and manifest files.
 - Each `data/v*/README.md` is a concise contract for that version.
 - Each manifest records the source fingerprints, settings, counts, and output

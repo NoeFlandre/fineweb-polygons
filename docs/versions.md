@@ -2,7 +2,7 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7, V8, and V9 are post-processing versions: V7 adds sentence lists to V6, V8 filters those V7 rows at document level, and V9 filters V8 sentences without changing polygon matching.
+Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7, V8, V9, and V10 are post-processing versions: V7 adds sentence lists to V6, V8 filters those V7 rows at document level, V9 filters V8 sentences without changing polygon matching, and V10 classifies V9 candidate sentences with a local LFM model.
 
 ## V1
 
@@ -219,3 +219,45 @@ positions away.
 
 The V1 file remains unchanged for reproducibility. A future regenerated file must
 use a new artifact path and document its own schema.
+
+## V10
+
+V10 is a post-processing version over the V9 artifacts. It does not reopen the
+FineWeb shard, read the OSM PBF, or create new polygon candidates. For every
+sentence in V9's `sentences_with_topic_term` list, it sends the exact sentence
+to the local `LiquidAI/LFM2.5-2.6B` model with the following task: decide
+whether the sentence contains information that could characterize the target
+place's land use, land cover, or geographic environment from remote sensing,
+including observable natural or built proxies.
+
+- The prompt is recorded verbatim and identified by SHA-256 in the manifest.
+- Inference is deterministic greedy generation with a batch size of 8 and a
+  maximum of 512 new tokens. The LFM chat template is used, followed by a
+  `</think>` assistant prefill so the model's final answer can be read without
+  spending the output budget on reasoning.
+- The only accepted labels are exact lowercase `yes` and `no`. A malformed or
+  ambiguous model answer fails the run; it is never treated as `no`.
+- Publish only sentences labeled `yes`. Drop a document when it has no `yes`
+  sentence. The output field `sentences_with_topic_term` therefore contains
+  only accepted sentences, aligned with `relevant_sentence_metadata`.
+- Retain identifiers, polygon fields, URL, topic fields, and the filtered
+  sentence evidence. Do not publish the original full `text`, original
+  `sentences` list, or any `no` sentence.
+- Checkpoint one completed V9 row at a time in JSONL. A restart validates the
+  source, source-model/runtime-model fingerprints, prompt, prefill, and
+  settings, then classifies only rows not already checkpointed. Output and
+  manifest publication is atomic.
+
+The supplied native LFM snapshot is the source model. The run uses a derived
+q4 MLX runtime created on the Seagate from that snapshot for efficient Apple
+Silicon inference. Both model fingerprints are written to the manifest; neither
+model nor the checkpoint is uploaded.
+
+The public V10 files are separate viewer splits:
+
+- `v10/monaco`: `data/v10/monaco-v10-10bt-000-v1-landuse.jsonl`
+- `v10/liechtenstein`: `data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl`
+
+On the first shard, V10 processed 93 Monaco candidate sentences and retained
+62 across 21 documents. It processed 9 Liechtenstein candidate sentences and
+retained 4 across 3 documents.

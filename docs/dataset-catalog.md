@@ -2,7 +2,7 @@
 
 The public dataset is [NoeFlandre/fineweb-polygons on Hugging Face](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons). The source code and runnable contracts are in the [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons). The machine-readable catalog is available as [`docs/dataset-catalog.json`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.json) and as [`metadata/catalog.json`](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json).
 
-All published V1–V9 paths are historical and immutable. A changed rule gets a
+All published V1–V10 paths are historical and immutable. A changed rule gets a
 new version and a new path. Each version also has a standalone README beside
 its data and a manifest or metadata file describing its inputs and settings.
 
@@ -17,6 +17,7 @@ its data and a manifest or metadata file describing its inputs and settings.
 | V7 | Post-processing | Monaco, Liechtenstein | Splits each V6 full text with `sat-3l-sm` and verifies exact reconstruction. |
 | V8 | Post-processing | Monaco, Liechtenstein | Keeps V7 documents containing at least one of 136 strong topic terms. |
 | V9 | Post-processing | Monaco, Liechtenstein | Keeps V8 topic sentences within two sentence positions of polygon-name evidence; publishes compact schema version 4 without six redundant V6 matching fields. |
+| V10 | Post-processing | Monaco, Liechtenstein | Classifies every V9 candidate sentence with the local LFM prompt and publishes only exact `yes` sentences; no full text or rejected sentences. |
 
 ## How to inspect a release
 
@@ -24,8 +25,10 @@ its data and a manifest or metadata file describing its inputs and settings.
 2. Open its `metadata/` manifest for source fingerprints, settings, counts, and
    result hashes.
 3. Use the HF viewer on the JSONL file to inspect the structured columns. V9’s
-   `sentences_with_topic_term` column is the quickest human-review entry point.
+   `sentences_with_topic_term` column is the quickest pre-classification review
+   entry point; V10's same column contains only LFM-`yes` sentences.
 
 The files are filtered evidence from the first FineWeb 10BT shard. Raw FineWeb,
 OSM PBFs, model caches, checkpoints, and logs remain on the Seagate project
-volume and are not uploaded.
+volume and are not uploaded. V10's manifest records both the supplied native
+LFM snapshot and the derived MLX q4 runtime used for Apple Silicon inference.
