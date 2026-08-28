@@ -206,7 +206,6 @@ def test_run_v10_publishes_only_yes_sentences_and_aligned_metadata(
         config.effective_checkpoint_path
     )
     assert manifest["classification"]["discarded_label"] == "no"
-    assert manifest["classification"]["deduplicate_exact_sentences"] is True
     assert manifest["classification"]["label_contract"] == ("exact lowercase yes or no")
     assert manifest["classification"]["prompt_template"] == (
         inference_module.V10_PROMPT_TEMPLATE
@@ -528,7 +527,6 @@ def test_v10_checkpoint_header_contains_the_reproducibility_contract(
             "max_new_tokens": config.max_new_tokens,
             "prompt_sha256": v10_module.PROMPT_SHA256,
             "assistant_prefill": inference_module.REASONING_CLOSE_TAG,
-            "deduplicate_exact_sentences": True,
         },
     }
 
@@ -1130,7 +1128,7 @@ def test_v10_write_output_preserves_batch_boundaries_and_newline_contract(
     ]
 
 
-def test_v10_classification_reuses_exact_duplicate_sentences() -> None:
+def test_v10_classification_preserves_duplicate_sentence_occurrences() -> None:
     candidates = [
         v10_module._CandidateRow(
             1,
@@ -1146,18 +1144,12 @@ def test_v10_classification_reuses_exact_duplicate_sentences() -> None:
         ),
     ]
     pending = [v10_module._PendingRow(candidate, None) for candidate in candidates]
-    classifier = _FakeClassifier(["yes", "no", "yes"])
-    cache: dict[str, str] = {}
+    classifier = _FakeClassifier(["yes", "no", "yes", "yes"])
 
-    labels = v10_module._classify_sentences(pending, classifier, cache)
+    labels = v10_module._classify_sentences(pending, classifier)
 
     assert labels == ("yes", "no", "yes", "yes")
-    assert classifier.calls == [("same", "first unique", "second unique")]
-    assert cache == {
-        "same": "yes",
-        "first unique": "no",
-        "second unique": "yes",
-    }
+    assert classifier.calls == [("same", "first unique", "same", "second unique")]
 
 
 def test_v10_saves_aligned_checkpoint_classifications() -> None:

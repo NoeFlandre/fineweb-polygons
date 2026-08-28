@@ -234,8 +234,8 @@ including observable natural or built proxies.
 - Inference is deterministic greedy generation with a batch size of 8 and a
   maximum of 4 new tokens. The LFM chat template is used, followed by a
   `</think>` assistant prefill so the model's final answer can be read without
-  spending the output budget on reasoning. Exact duplicate sentence strings
-  are classified once per run and their labels are reused.
+  spending the output budget on reasoning. The historical sentence batch
+  composition is preserved for output compatibility.
 - The only accepted labels are exact lowercase `yes` and `no`. A malformed or
   ambiguous model answer fails the run; it is never treated as `no`.
 - Publish only sentences labeled `yes`. Drop a document when it has no `yes`
