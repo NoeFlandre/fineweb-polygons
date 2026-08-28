@@ -774,7 +774,7 @@ def _manifest_records(
 ) -> tuple[Mapping[str, object], ...] | None:
     if not all(isinstance(record, Mapping) for record in records):
         return None
-    return cast(tuple[Mapping[str, object], ...], records)
+    return tuple(record for record in records if isinstance(record, Mapping))
 
 
 def _summary_counts(

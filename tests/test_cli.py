@@ -693,6 +693,52 @@ def test_cli_parser_exposes_the_v10_model_filter_command() -> None:
     assert defaults.max_new_tokens == 512
 
 
+@pytest.mark.parametrize(
+    "missing", ["--input", "--output", "--manifest", "--model-path"]
+)
+def test_cli_v10_requires_all_input_paths(missing: str) -> None:
+    parser = _build_parser()
+    arguments = {
+        "--input": "v9.jsonl",
+        "--output": "v10.jsonl",
+        "--manifest": "manifest.json",
+        "--model-path": "model",
+    }
+    filtered = [
+        value
+        for option, value in arguments.items()
+        if option != missing
+        for value in (option, value)
+    ]
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["filter-v10", *filtered])
+
+
+def test_cli_v10_parser_exposes_stable_defaults_and_help() -> None:
+    parser = _build_parser()
+    parsed = parser.parse_args(
+        [
+            "filter-v10",
+            "--input",
+            "v9.jsonl",
+            "--output",
+            "v10.jsonl",
+            "--manifest",
+            "manifest.json",
+            "--model-path",
+            "model",
+        ]
+    )
+
+    assert parsed.batch_size == 8
+    assert parsed.runtime_model_path is None
+    assert parsed.checkpoint is None
+    assert "classify V9 candidate sentences with a local LFM model" in (
+        parser.format_help()
+    )
+
+
 def test_cli_runs_v10_and_serializes_its_summary(tmp_path: Path, capsys) -> None:
     data_root = tmp_path / "external"
     captured = {}

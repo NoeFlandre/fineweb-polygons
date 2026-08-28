@@ -74,7 +74,7 @@ def parse_label(raw_output: str) -> str:
     label = raw_output.strip()
     if label not in {"yes", "no"}:
         if "</think>" in label:
-            label = label.rsplit("</think>", maxsplit=1)[-1].strip()
+            label = label.rpartition("</think>")[2].strip()
         if label not in {"yes", "no"}:
             raise ValueError(
                 f"Classifier output must be exactly yes or no: {raw_output!r}"

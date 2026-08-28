@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from contextlib import contextmanager
+from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar, cast
@@ -47,7 +49,11 @@ def _write_v9_input(path: Path) -> None:
             "polygon_id": "way/1",
             "polygon_name": "Fontvieille",
             "relevant_sentence_metadata": [
-                {"sentence_index": 0, "topic_terms": ["park"]},
+                {
+                    "sentence_index": 0,
+                    "topic_categories": ["land_use"],
+                    "topic_terms": ["park"],
+                },
                 {"sentence_index": 1, "topic_terms": ["event"]},
             ],
             "sentences": [
@@ -174,8 +180,13 @@ def test_run_v10_publishes_only_yes_sentences_and_aligned_metadata(
     assert summary.no_sentences == 2
     assert rows[0]["sentences_with_topic_term"] == ["Fontvieille has a park. "]
     assert rows[0]["relevant_sentence_metadata"] == [
-        {"sentence_index": 0, "topic_terms": ["park"]}
+        {
+            "sentence_index": 0,
+            "topic_categories": ["land_use"],
+            "topic_terms": ["park"],
+        }
     ]
+    assert rows[0]["topic_categories"] == ["land_use"]
     assert rows[0]["topic_sentence_count"] == 1
     assert rows[0]["topic_terms"] == ["park"]
     assert "text" not in rows[0]
@@ -186,8 +197,31 @@ def test_run_v10_publishes_only_yes_sentences_and_aligned_metadata(
     assert manifest["candidate_sentences_processed"] == 3
     assert manifest["yes_sentences_written"] == 1
     assert manifest["no_sentences"] == 2
+    assert manifest["source"]["path"] == str(config.input_path.resolve())
+    assert manifest["source"]["sha256"] == v10_module._sha256_file(config.input_path)
+    assert manifest["checkpoint"]["path"] == str(
+        config.effective_checkpoint_path.resolve()
+    )
+    assert manifest["checkpoint"]["sha256"] == v10_module._sha256_file(
+        config.effective_checkpoint_path
+    )
+    assert manifest["classification"]["discarded_label"] == "no"
+    assert manifest["classification"]["label_contract"] == ("exact lowercase yes or no")
+    assert manifest["classification"]["prompt_template"] == (
+        inference_module.V10_PROMPT_TEMPLATE
+    )
     assert manifest["classification"]["prompt_sha256"] == v10_module.PROMPT_SHA256
     assert manifest["result"]["sha256"] == summary.result_sha256
+
+    checkpoint_header = json.loads(
+        config.effective_checkpoint_path.read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert checkpoint_header["source_version"] == "v9"
+    assert checkpoint_header["source"]["path"] == str(config.input_path.resolve())
+    assert checkpoint_header["source"]["sha256"] == manifest["source"]["sha256"]
+    assert checkpoint_header["classification"]["assistant_prefill"] == (
+        inference_module.REASONING_CLOSE_TAG
+    )
 
 
 def test_run_v10_rejects_any_classifier_output_other_than_yes_or_no(
@@ -285,6 +319,18 @@ def test_v10_config_exposes_explicit_runtime_and_validates_settings(
             max_new_tokens=0,
         )
 
+    assert (
+        V10RunConfig(
+            input_path=config.input_path,
+            output_path=config.output_path,
+            manifest_path=config.manifest_path,
+            model_path=config.model_path,
+            batch_size=1,
+            max_new_tokens=1,
+        ).batch_size
+        == 1
+    )
+
 
 def test_v10_path_resolution_reports_missing_inputs_and_duplicate_runtime(
     tmp_path: Path,
@@ -316,6 +362,25 @@ def test_v10_path_resolution_reports_missing_inputs_and_duplicate_runtime(
     explicit.effective_runtime_model_path = runtime
     with pytest.raises(FileNotFoundError, match="missing-runtime"):
         v10_module._resolve_paths(cast(V10RunConfig, explicit))
+
+
+def test_v10_distinct_path_validation_checks_the_checkpoint_and_exact_message(
+    tmp_path: Path,
+) -> None:
+    paths = tuple(tmp_path / name for name in ("input", "output", "manifest", "model"))
+    duplicate_paths = (
+        paths[0],
+        paths[1],
+        paths[2],
+        paths[3],
+        paths[0],
+        tmp_path / "runtime",
+    )
+
+    with pytest.raises(ValueError) as error:
+        v10_module._validate_distinct_paths(duplicate_paths, runtime_is_explicit=False)
+
+    assert str(error.value) == "V10 paths must be different"
 
 
 def test_v10_builds_the_native_or_mlx_classifier_from_runtime_configuration(
@@ -352,6 +417,69 @@ def test_v10_builds_the_native_or_mlx_classifier_from_runtime_configuration(
     ]
 
 
+def test_run_v10_builds_a_classifier_when_none_is_injected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = _config(tmp_path)
+    _write_v9_input(config.input_path)
+    calls = []
+
+    def build_classifier(received_config, runtime_path):
+        calls.append((received_config, runtime_path))
+        return _FakeClassifier(["no", "no", "no"])
+
+    monkeypatch.setattr(v10_module, "_build_classifier", build_classifier)
+
+    run_v10(config)
+
+    assert calls == [(config, config.model_path.resolve())]
+
+
+def test_v10_model_record_contains_file_and_snapshot_fingerprints(
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    config_path = model_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    (model_path / ".incomplete-config").write_text("ignore", encoding="utf-8")
+
+    record = v10_module._model_record(model_path)
+
+    assert record["snapshot_id"] == "model"
+    assert "sha256" in record
+    assert isinstance(record["sha256"], str)
+    assert len(record["sha256"]) == 64
+    assert record["files"] == [
+        {
+            "path": "config.json",
+            "sha256": v10_module._sha256_file(config_path),
+        }
+    ]
+
+
+def test_v10_checkpoint_header_contains_the_reproducibility_contract(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    header = v10_module._checkpoint_header(
+        config=config,
+        input_path=config.input_path,
+        source_sha256="source-sha",
+        model_record={"model": "source"},
+        runtime_model_record={"model": "runtime"},
+    )
+
+    assert header["source_version"] == "v9"
+    assert header["source"] == {
+        "path": str(config.input_path),
+        "sha256": "source-sha",
+    }
+    assert header["classification"]["assistant_prefill"] == (
+        inference_module.REASONING_CLOSE_TAG
+    )
+
+
 def test_v10_checkpoint_parser_skips_blank_and_truncated_final_lines() -> None:
     records = v10_module._checkpoint_records(
         [
@@ -362,6 +490,36 @@ def test_v10_checkpoint_parser_skips_blank_and_truncated_final_lines() -> None:
     )
 
     assert records == {1: ("yes",)}
+
+
+def test_v10_open_checkpoint_writes_sorted_utf8_headers_and_reads_utf8(
+    tmp_path: Path, monkeypatch
+) -> None:
+    checkpoint = tmp_path / "checkpoint.jsonl"
+    expected_header = {"z": "é", "a": 1}
+    write_encoding = []
+    open_encoding = []
+    original_write_text = Path.write_text
+    original_open = Path.open
+
+    def write_text(path, data, *args, **kwargs):
+        write_encoding.append(kwargs.get("encoding"))
+        return original_write_text(path, data, *args, **kwargs)
+
+    def open_path(path, *args, **kwargs):
+        open_encoding.append(kwargs.get("encoding"))
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+    monkeypatch.setattr(Path, "open", open_path)
+
+    assert v10_module._open_checkpoint(checkpoint, expected_header) == {}
+    assert v10_module._open_checkpoint(checkpoint, expected_header) == {}
+    assert write_encoding == ["utf-8"]
+    assert open_encoding == ["utf-8", "utf-8"]
+    assert checkpoint.read_text(encoding="utf-8") == (
+        json.dumps(expected_header, ensure_ascii=False, sort_keys=True) + "\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -384,13 +542,18 @@ def test_v10_checkpoint_parser_rejects_non_final_bad_and_duplicate_records() -> 
     with pytest.raises(ValueError, match="repeats row 1"):
         v10_module._checkpoint_records([duplicate, duplicate])
 
+    with pytest.raises(ValueError) as error:
+        v10_module._parse_checkpoint_record("[]", 2, 3)
+    assert str(error.value) == "V10 checkpoint line 2 must be an object"
+
 
 def test_v10_checkpoint_open_rejects_a_mismatched_header(tmp_path: Path) -> None:
     checkpoint = tmp_path / "checkpoint.jsonl"
     checkpoint.write_text("{}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="does not match"):
+    with pytest.raises(ValueError) as error:
         v10_module._open_checkpoint(checkpoint, {"expected": True})
+    assert str(error.value) == "V10 checkpoint does not match the current run"
 
 
 def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
@@ -415,6 +578,22 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
     with pytest.raises(ValueError, match="topic_terms"):
         v10_module._metadata_values([{"topic_terms": "park"}], "topic_terms")
 
+    with pytest.raises(ValueError) as error:
+        v10_module._decode_input_line("[]", 4)
+    assert str(error.value) == "V9 JSONL line 4 must be an object"
+    with pytest.raises(ValueError) as error:
+        v10_module._decode_input_line(
+            json.dumps({"sentences_with_topic_term": "sentence"}), 4
+        )
+    assert str(error.value) == (
+        "V9 JSONL line 4 must contain a list of candidate sentences"
+    )
+    assert v10_module._is_mapping_list({}) is False
+
+    with pytest.raises(ValueError) as error:
+        v10_module._validate_labels(["maybe"])
+    assert str(error.value) == "Classifier labels must be exactly yes or no"
+
 
 def test_v10_reusable_summary_rejects_bad_counts_and_result_hash(
     tmp_path: Path,
@@ -423,6 +602,22 @@ def test_v10_reusable_summary_rejects_bad_counts_and_result_hash(
     _write_v9_input(config.input_path)
     run_v10(config, classifier=_FakeClassifier(["yes", "no", "no"]))
     manifest = json.loads(config.manifest_path.read_text(encoding="utf-8"))
+    output_text = config.output_path.read_text(encoding="utf-8")
+    config.output_path.unlink()
+    assert (
+        v10_module._reusable_manifest(
+            config.manifest_path,
+            config=config,
+            input_path=config.input_path,
+            output_path=config.output_path,
+            checkpoint_path=config.effective_checkpoint_path,
+            source_sha256=v10_module._sha256_file(config.input_path),
+            model_record=v10_module._model_record(config.model_path),
+            runtime_model_record=v10_module._model_record(config.model_path),
+        )
+        is None
+    )
+    config.output_path.write_text(output_text, encoding="utf-8")
 
     manifest["rows_processed"] = "two"
     config.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -472,8 +667,11 @@ def test_v10_manifest_helpers_reject_malformed_records(tmp_path: Path) -> None:
         runtime_model_record=model_record,
     )
     assert v10_module._summary_counts({}) is None
-    with pytest.raises(ValueError, match="invalid result record"):
+    records = v10_module._manifest_records({"source": True}, {"result": True})
+    assert records == ({"source": True}, {"result": True})
+    with pytest.raises(ValueError) as error:
         v10_module._nested_string({}, "result", "sha256")
+    assert str(error.value) == "V10 manifest has an invalid result record"
 
 
 def test_v10_chat_rendering_supports_fallback_and_string_mlx_templates() -> None:
@@ -522,6 +720,10 @@ def test_v10_mlx_rendering_rejects_non_integer_tokens(tokenizer) -> None:
 def test_v10_label_parser_rejects_non_contract_answers(raw_output: str) -> None:
     with pytest.raises(ValueError, match="exactly yes or no"):
         parse_label(raw_output)
+
+
+def test_v10_label_parser_uses_the_last_reasoning_close_tag() -> None:
+    assert parse_label("<think>first</think><think>second</think>yes") == "yes"
 
 
 class _FakeTorch:
@@ -753,3 +955,108 @@ def test_v10_runtime_helpers_select_devices_and_configure_padding() -> None:
     inference_module._configure_tokenizer(tokenizer)
     assert tokenizer.padding_side == "left"
     assert tokenizer.pad_token is None
+
+
+def test_v10_read_rows_uses_one_based_line_numbers_and_utf8(
+    tmp_path: Path, monkeypatch
+) -> None:
+    input_path = tmp_path / "v9.jsonl"
+    _write_v9_input(input_path)
+    encodings = []
+    original_open = Path.open
+
+    def open_path(path, *args, **kwargs):
+        encodings.append(kwargs.get("encoding"))
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_path)
+
+    rows = list(v10_module._read_rows(input_path))
+
+    assert [row.line_number for row in rows] == [1, 2]
+    assert encodings == ["utf-8"]
+
+
+def test_v10_write_output_preserves_batch_boundaries_and_newline_contract(
+    tmp_path: Path, monkeypatch
+) -> None:
+    input_path = tmp_path / "v9.jsonl"
+    rows = [
+        {
+            "sentences_with_topic_term": [f"sentence-{index}"],
+            "relevant_sentence_metadata": [{"topic_categories": [], "topic_terms": []}],
+        }
+        for index in range(4)
+    ]
+    input_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    output_path = tmp_path / "output.jsonl"
+    checkpoint_path = tmp_path / "checkpoint.jsonl"
+    checkpoint_path.touch()
+    captured = {}
+
+    @contextmanager
+    def fake_atomic_text_output(path, **kwargs):
+        captured.update(kwargs)
+        yield StringIO()
+
+    monkeypatch.setattr(v10_module, "_atomic_text_output", fake_atomic_text_output)
+    classifier = _FakeClassifier(["no"] * 4)
+    stats = v10_module._OutputStats()
+
+    v10_module._write_output(
+        input_path=input_path,
+        output_path=output_path,
+        checkpoint_path=checkpoint_path,
+        checkpoint={},
+        classifier=classifier,
+        batch_size=2,
+        stats=stats,
+    )
+
+    assert captured == {"newline": "\n"}
+    assert classifier.calls == [
+        ("sentence-0", "sentence-1"),
+        ("sentence-2", "sentence-3"),
+    ]
+
+
+def test_v10_saves_aligned_checkpoint_classifications() -> None:
+    candidates = [
+        v10_module._CandidateRow(
+            index, {}, tuple(f"s{index}-{n}" for n in range(size)), ()
+        )
+        for index, size in ((1, 1), (2, 2), (3, 1))
+    ]
+    pending = [v10_module._PendingRow(candidate, None) for candidate in candidates]
+    checkpoint = {}
+    checkpoint_output = StringIO()
+
+    v10_module._save_classifications(
+        pending,
+        ["yes", "no", "yes", "no"],
+        checkpoint=checkpoint,
+        checkpoint_output=checkpoint_output,
+    )
+
+    assert [item.labels for item in pending] == [
+        ("yes",),
+        ("no", "yes"),
+        ("no",),
+    ]
+    assert checkpoint == {1: ("yes",), 2: ("no", "yes"), 3: ("no",)}
+
+
+def test_v10_classified_row_counts_a_yes_row_as_kept() -> None:
+    candidate = v10_module._CandidateRow(
+        1,
+        {},
+        ("a sentence",),
+        ({"topic_categories": [], "topic_terms": []},),
+    )
+    stats = v10_module._OutputStats()
+
+    v10_module._write_classified_row(StringIO(), candidate, ["yes"], stats)
+
+    assert stats.rows_kept == 1
