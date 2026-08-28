@@ -7,6 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+import fineweb_polygons.artifact_io as artifact_io
 import fineweb_polygons.scanning as scanning_module
 from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import FineWebDocument, PolygonProfile
@@ -316,13 +317,13 @@ def test_write_matches_uses_stable_unicode_json(monkeypatch) -> None:
 
     output = StringIO()
     ensure_ascii_values: list[object] = []
-    real_dumps = scanning_module.json.dumps
+    real_dumps = artifact_io.json.dumps
 
     def dumps(value, *args, **kwargs):
         ensure_ascii_values.append(kwargs.get("ensure_ascii"))
         return real_dumps(value, *args, **kwargs)
 
-    monkeypatch.setattr(scanning_module.json, "dumps", dumps)
+    monkeypatch.setattr(artifact_io.json, "dumps", dumps)
 
     assert (
         _write_matches(

@@ -6,10 +6,11 @@ from copy import deepcopy
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
+import fineweb_polygons.artifact_io as artifact_io
 import fineweb_polygons.v9 as v9_module
 from fineweb_polygons.v9 import V9RunConfig, run_v9
 
@@ -635,36 +636,32 @@ def test_v9_atomic_json_output_is_stable_and_human_readable(tmp_path: Path) -> N
     )
 
 
+def test_v9_output_declares_explicit_unix_newlines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path)
+    _write_v8_input(config.input_path)
+    _write_vocabulary(config.vocabulary_path)
+    newlines: list[object] = []
+
+    def recording_output(path: Path, **kwargs: Any) -> Any:
+        newlines.append(kwargs["newline"])
+        return artifact_io.atomic_text_output(path, **kwargs)
+
+    monkeypatch.setattr(v9_module, "_atomic_text_output", recording_output)
+
+    run_v9(config)
+
+    assert newlines == ["\n"]
+
+
 def test_v9_temporary_paths_are_hidden_sibling_tmp_files(tmp_path: Path) -> None:
     target = tmp_path / "artifacts" / "result.jsonl"
     target.parent.mkdir()
 
-    temporary = v9_module._temporary_path(target)
+    temporary = artifact_io.temporary_path(target)
 
     assert temporary.parent == target.parent
     assert temporary.name.startswith(f".{target.name}.")
     assert temporary.name.endswith(".tmp")
     assert not temporary.exists()
-
-
-def test_v9_write_output_preserves_open_failure_when_temp_file_is_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output_path = tmp_path / "nested" / "v9.jsonl"
-    output_path.parent.mkdir()
-    vocabulary_path = tmp_path / "vocabulary.json"
-    _write_vocabulary(vocabulary_path)
-    vocabulary = v9_module.load_vocabulary(vocabulary_path)
-
-    def fail_to_open(_: Path) -> object:
-        raise RuntimeError("open failed")
-
-    monkeypatch.setattr(v9_module, "_open_text_output", fail_to_open)
-
-    with pytest.raises(RuntimeError, match="open failed"):
-        v9_module._write_output(
-            input_path=tmp_path / "input.jsonl",
-            output_path=output_path,
-            vocabulary=vocabulary,
-            context_window=2,
-        )

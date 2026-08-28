@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import tempfile
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fineweb_polygons.artifact_io import (
+    atomic_json_write as _atomic_json_write,
+)
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    read_json_object as _read_manifest,
+)
+from fineweb_polygons.artifact_io import (
+    sha256_file as _sha256_file,
+)
+from fineweb_polygons.artifact_io import (
+    write_json_line as _write_json_line,
+)
 from fineweb_polygons.segmentation import (
     SaTSentenceSegmenter,
     SentenceSegmentationConfig,
@@ -155,22 +167,13 @@ def _write_output(
     batch_size: int,
     segmenter: SentenceSegmenter,
 ) -> tuple[int, int]:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_output = _temporary_path(output_path)
     rows_processed = 0
     sentences_written = 0
-    try:
-        with temporary_output.open("w", encoding="utf-8", newline="\n") as output:
-            for rows, texts in _read_batches(input_path, batch_size):
-                rows_count, sentence_count = _write_batch(
-                    output, rows, texts, segmenter
-                )
-                rows_processed += rows_count
-                sentences_written += sentence_count
-        os.replace(temporary_output, output_path)
-    except BaseException:
-        temporary_output.unlink(missing_ok=True)
-        raise
+    with _atomic_text_output(output_path, newline="\n") as output:
+        for rows, texts in _read_batches(input_path, batch_size):
+            rows_count, sentence_count = _write_batch(output, rows, texts, segmenter)
+            rows_processed += rows_count
+            sentences_written += sentence_count
     return rows_processed, sentences_written
 
 
@@ -186,7 +189,7 @@ def _write_batch(
     sentences_written = 0
     for row, text, sentences in zip(rows, texts, sentence_batches, strict=True):
         row["sentences"] = list(validate_segments(text, sentences))
-        output.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        _write_json_line(output, row)
         sentences_written += len(sentences)
     return len(rows), sentences_written
 
@@ -323,16 +326,6 @@ def _with_valid_result_hash(
     return manifest
 
 
-def _read_manifest(path: Path) -> dict[str, Any] | None:
-    try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(manifest, dict):
-        return None
-    return manifest
-
-
 def _manifest_matches(
     manifest: Mapping[str, object],
     config: V7RunConfig,
@@ -377,36 +370,3 @@ def _matching_segmentation_settings(
         recorded.get(key) == value
         for key, value in config.segmentation_record().items()
     )
-
-
-def _temporary_path(path: Path) -> Path:
-    descriptor, name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    os.close(descriptor)
-    temporary = Path(name)
-    temporary.unlink()
-    return temporary
-
-
-def _atomic_json_write(path: Path, value: Mapping[str, object]) -> None:
-    temporary = _temporary_path(path)
-    try:
-        temporary.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, path)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()

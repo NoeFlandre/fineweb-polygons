@@ -7,29 +7,33 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    deterministic_temporary_path as _deterministic_temporary_path,
+)
+
 
 def deduplicate_matches(path: Path) -> int:
     """Keep the first match for each polygon/document identity."""
-    temporary_path = path.with_name(f".{path.name}.tmp")
     identities: set[tuple[str, ...]] = set()
     retained = 0
-    try:
-        with (
-            path.open("r", encoding="utf-8") as source,
-            temporary_path.open("w", encoding="utf-8") as output,
-        ):
-            for line in source:
-                record = json.loads(line)
-                identity = _record_identity(record)
-                if identity in identities:
-                    continue
-                identities.add(identity)
-                output.write(line if line.endswith("\n") else f"{line}\n")
-                retained += 1
-        temporary_path.replace(path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        raise
+    with (
+        path.open("r", encoding="utf-8") as source,
+        _atomic_text_output(
+            path,
+            temporary_factory=_deterministic_temporary_path,
+        ) as output,
+    ):
+        for line in source:
+            record = json.loads(line)
+            identity = _record_identity(record)
+            if identity in identities:
+                continue
+            identities.add(identity)
+            output.write(line if line.endswith("\n") else f"{line}\n")
+            retained += 1
     return retained
 
 

@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import tempfile
 from collections import Counter
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fineweb_polygons.artifact_io import (
+    atomic_json_write as _atomic_json_write,
+)
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    read_json_object as _read_manifest,
+)
+from fineweb_polygons.artifact_io import (
+    sha256_file as _sha256_file,
+)
+from fineweb_polygons.artifact_io import (
+    write_json_line as _write_kept_row,
+)
 from fineweb_polygons.topic_vocabulary import (
     TopicVocabulary,
     load_vocabulary,
@@ -139,35 +151,24 @@ def _write_output(
     output_path: Path,
     vocabulary: TopicVocabulary,
 ) -> tuple[int, int, dict[str, int]]:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_output = _temporary_path(output_path)
     rows_processed = 0
     rows_kept = 0
     category_documents: Counter[str] = Counter()
-    try:
-        with temporary_output.open("w", encoding="utf-8", newline="\n") as output:
-            for row, text in _read_rows(input_path):
-                rows_processed += 1
-                categories = _matching_categories(vocabulary, text)
-                if not categories:
-                    continue
-                _write_kept_row(output, row)
-                rows_kept += 1
-                _add_category_documents(category_documents, categories)
-        os.replace(temporary_output, output_path)
-    except BaseException:
-        temporary_output.unlink(missing_ok=True)
-        raise
+    with _atomic_text_output(output_path, newline="\n") as output:
+        for row, text in _read_rows(input_path):
+            rows_processed += 1
+            categories = _matching_categories(vocabulary, text)
+            if not categories:
+                continue
+            _write_kept_row(output, row)
+            rows_kept += 1
+            _add_category_documents(category_documents, categories)
     return rows_processed, rows_kept, dict(sorted(category_documents.items()))
 
 
 def _matching_categories(vocabulary: TopicVocabulary, text: str) -> tuple[str, ...]:
     matches = vocabulary.match_text(text)
     return tuple({match.category for match in matches})
-
-
-def _write_kept_row(output: Any, row: dict[str, Any]) -> None:
-    output.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _add_category_documents(counts: Counter[str], categories: tuple[str, ...]) -> None:
@@ -380,46 +381,3 @@ def _validated_category_documents(
             return None
         documents[category] = count
     return documents
-
-
-def _read_manifest(path: Path) -> dict[str, Any] | None:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(value, dict):
-        return None
-    return value
-
-
-def _temporary_path(path: Path) -> Path:
-    descriptor, name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    os.close(descriptor)
-    temporary = Path(name)
-    temporary.unlink()
-    return temporary
-
-
-def _atomic_json_write(path: Path, value: Mapping[str, object]) -> None:
-    temporary = _temporary_path(path)
-    try:
-        temporary.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, path)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()

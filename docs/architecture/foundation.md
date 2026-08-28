@@ -33,6 +33,9 @@ configured Seagate data root.
 The runner and V9 modules are stable compatibility façades. Their value objects
 live in focused modules so orchestration can evolve without changing imports:
 
+- `artifact_io.py` owns stable JSONL writes, atomic text and JSON publication,
+  manifest reads, temporary sibling paths, and bounded file hashing for every
+  pipeline stage.
 - `run_models.py` owns scan configuration, summaries, partition identities, run
   layout, and profile preparation records.
 - `runs.py` owns scan orchestration, matching wiring, checkpoints, and frequency

@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+import fineweb_polygons.artifact_io as artifact_io
+import fineweb_polygons.deduplication as deduplication_module
 from fineweb_polygons.deduplication import _record_identity, deduplicate_matches
 
 
@@ -92,6 +94,28 @@ def test_deduplicate_matches_opens_both_files_as_utf8(
         (("r",), {"encoding": "utf-8"}),
         (("w",), {"encoding": "utf-8"}),
     ]
+
+
+def test_deduplicate_matches_uses_the_deterministic_temporary_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "matches.jsonl"
+    path.write_text(_record("one") + "\n", encoding="utf-8")
+    temporary_factories: list[object] = []
+
+    def recording_output(path: Path, **kwargs: Any) -> Any:
+        temporary_factories.append(kwargs["temporary_factory"])
+        return artifact_io.atomic_text_output(path, **kwargs)
+
+    monkeypatch.setattr(
+        deduplication_module,
+        "_atomic_text_output",
+        recording_output,
+    )
+
+    deduplicate_matches(path)
+
+    assert temporary_factories == [deduplication_module._deterministic_temporary_path]
 
 
 def test_deduplicate_matches_preserves_the_source_error_if_temp_is_absent(

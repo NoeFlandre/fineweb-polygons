@@ -13,6 +13,21 @@ from typing import Any, cast
 
 import pyarrow.parquet as pq
 
+from fineweb_polygons.artifact_io import (
+    atomic_json_write as _shared_atomic_json_write,
+)
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    deterministic_temporary_path as _deterministic_temporary_path,
+)
+from fineweb_polygons.artifact_io import (
+    sha256_file as _sha256_file,
+)
+from fineweb_polygons.artifact_io import (
+    write_json_line as _write_json_line,
+)
 from fineweb_polygons.deduplication import deduplicate_matches
 from fineweb_polygons.foundation import validate_data_path, validate_external_data_root
 from fineweb_polygons.matching import EvidenceMatcher
@@ -772,56 +787,35 @@ def _partition_structure(partitions: object) -> list[dict[str, object]]:
 
 
 def _merge_partitions(layout: _RunLayout, partitions: Sequence[_Partition]) -> None:
-    temporary_path = layout.result_path.with_name(f".{layout.result_path.name}.tmp")
-    layout.result_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with temporary_path.open("w", encoding="utf-8") as output:
-            for partition in partitions:
-                partition_path = layout.partitions_dir / (
-                    f"partition-{partition.index:05d}.jsonl"
-                )
-                if partition_path.exists():
-                    with partition_path.open("r", encoding="utf-8") as partition:
-                        shutil.copyfileobj(partition, output)
-        temporary_path.replace(layout.result_path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        raise
+    with _atomic_text_output(
+        layout.result_path,
+        temporary_factory=_deterministic_temporary_path,
+    ) as output:
+        for partition in partitions:
+            partition_path = layout.partitions_dir / (
+                f"partition-{partition.index:05d}.jsonl"
+            )
+            if partition_path.exists():
+                with partition_path.open("r", encoding="utf-8") as partition:
+                    shutil.copyfileobj(partition, output)
 
 
 def _atomic_json_write(path: Path, value: Mapping[str, Any]) -> None:
-    temporary_path = path.with_name(f".{path.name}.tmp")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        temporary_path.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        temporary_path.replace(path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        raise
+    _shared_atomic_json_write(
+        path,
+        value,
+        temporary_factory=_deterministic_temporary_path,
+    )
 
 
 def _log(path: Path, event: str, **fields: object) -> None:
     record = {"timestamp": _timestamp(), "event": event, **fields}
     with path.open("a", encoding="utf-8") as output:
-        output.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        _write_json_line(output, record)
 
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        while True:
-            chunk = source.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _sha256_payload(value: object) -> str:

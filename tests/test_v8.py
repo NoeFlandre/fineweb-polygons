@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import pytest
 
+import fineweb_polygons.artifact_io as artifact_io
 import fineweb_polygons.v8 as v8_module
 from fineweb_polygons.topic_vocabulary import load_vocabulary
 from fineweb_polygons.v8 import V8RunConfig, run_v8
@@ -448,16 +449,16 @@ def test_read_manifest_requires_utf8_and_rejects_invalid_json(
 def test_temporary_path_uses_local_stable_prefix_and_suffix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real_mkstemp = v8_module.tempfile.mkstemp
+    real_mkstemp = artifact_io.tempfile.mkstemp
     captured: dict[str, object] = {}
 
     def recording_mkstemp(**kwargs: Any):
         captured.update(kwargs)
         return real_mkstemp(**kwargs)
 
-    monkeypatch.setattr(v8_module.tempfile, "mkstemp", recording_mkstemp)
+    monkeypatch.setattr(artifact_io.tempfile, "mkstemp", recording_mkstemp)
 
-    temporary = v8_module._temporary_path(tmp_path / "result.json")
+    temporary = artifact_io.temporary_path(tmp_path / "result.json")
 
     assert temporary.parent == tmp_path
     assert captured == {
@@ -505,7 +506,7 @@ def test_atomic_writes_clean_up_a_missing_temporary_file(
         temporary.unlink()
         raise OSError("replace failed")
 
-    monkeypatch.setattr(v8_module.os, "replace", fail_after_removing_temporary)
+    monkeypatch.setattr(artifact_io.os, "replace", fail_after_removing_temporary)
 
     with pytest.raises(OSError, match="replace failed"):
         v8_module._atomic_json_write(tmp_path / "manifest.json", {"status": "complete"})
@@ -522,7 +523,7 @@ def test_write_output_cleans_up_a_missing_temporary_file(
         temporary.unlink()
         raise OSError("replace failed")
 
-    monkeypatch.setattr(v8_module.os, "replace", fail_after_removing_temporary)
+    monkeypatch.setattr(artifact_io.os, "replace", fail_after_removing_temporary)
 
     with pytest.raises(OSError, match="replace failed"):
         v8_module._write_output(

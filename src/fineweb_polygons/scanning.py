@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +9,15 @@ from typing import Any, TextIO
 
 import pyarrow.parquet as pq
 
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    deterministic_temporary_path as _deterministic_temporary_path,
+)
+from fineweb_polygons.artifact_io import (
+    write_json_line as _write_json_line,
+)
 from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import FineWebDocument
 
@@ -113,23 +121,19 @@ def _scan_partition(
     output_path: Path,
     batch_size: int,
 ) -> ScanStats:
-    temporary_path = output_path.with_name(f".{output_path.name}.tmp")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with temporary_path.open("w", encoding="utf-8") as output:
-            stats = _scan_batches(
-                parquet_file,
-                selected_row_groups=selected_row_groups,
-                projected_columns=projected_columns,
-                row_start=row_start,
-                matcher=matcher,
-                output=output,
-                batch_size=batch_size,
-            )
-        temporary_path.replace(output_path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        raise
+    with _atomic_text_output(
+        output_path,
+        temporary_factory=_deterministic_temporary_path,
+    ) as output:
+        stats = _scan_batches(
+            parquet_file,
+            selected_row_groups=selected_row_groups,
+            projected_columns=projected_columns,
+            row_start=row_start,
+            matcher=matcher,
+            output=output,
+            batch_size=batch_size,
+        )
     return stats
 
 
@@ -190,8 +194,7 @@ def _write_matches(
 ) -> int:
     matches = matcher.match(document)
     for match in matches:
-        output.write(json.dumps(match.to_record(), ensure_ascii=False, sort_keys=True))
-        output.write("\n")
+        _write_json_line(output, match.to_record())
     return len(matches)
 
 

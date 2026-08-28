@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeGuard, cast
 
+from fineweb_polygons.artifact_io import (
+    atomic_json_write as _atomic_json_write,
+)
+from fineweb_polygons.artifact_io import (
+    atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    read_json_object as _read_manifest,
+)
+from fineweb_polygons.artifact_io import (
+    sha256_file as _sha256_file,
+)
+from fineweb_polygons.artifact_io import (
+    write_json_line as _write_kept_row,
+)
 from fineweb_polygons.matching import _MultiPatternMatcher
 from fineweb_polygons.normalization import normalize_for_search
 from fineweb_polygons.segmentation import validate_segments
@@ -131,33 +143,26 @@ def _write_output(
     vocabulary: TopicVocabulary,
     context_window: int,
 ) -> tuple[int, int, int, int, dict[str, int]]:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_output = _temporary_path(output_path)
     stats = _OutputStats()
-    try:
-        with _open_text_output(temporary_output) as output:
-            for row, sentences in _read_rows(input_path):
-                stats.record_seen(len(sentences))
-                output_row = _enriched_row(
-                    row,
-                    sentences,
-                    vocabulary=vocabulary,
-                    context_window=context_window,
-                )
-                if output_row is None:
-                    continue
-                _write_kept_row(output, output_row)
-                # pragma: no mutate start
-                relevant = cast(
-                    Sequence[Mapping[str, object]],
-                    output_row["relevant_sentence_metadata"],
-                )
-                # pragma: no mutate end
-                stats.record_kept(relevant)
-        os.replace(temporary_output, output_path)
-    except BaseException:
-        temporary_output.unlink(missing_ok=True)
-        raise
+    with _atomic_text_output(output_path, newline="\n") as output:
+        for row, sentences in _read_rows(input_path):
+            stats.record_seen(len(sentences))
+            output_row = _enriched_row(
+                row,
+                sentences,
+                vocabulary=vocabulary,
+                context_window=context_window,
+            )
+            if output_row is None:
+                continue
+            _write_kept_row(output, output_row)
+            # pragma: no mutate start
+            relevant = cast(
+                Sequence[Mapping[str, object]],
+                output_row["relevant_sentence_metadata"],
+            )
+            # pragma: no mutate end
+            stats.record_kept(relevant)
     return stats.as_tuple()
 
 
@@ -344,10 +349,6 @@ def _nearest_distance(index: int, anchors: Sequence[int]) -> int | None:
 
 def _ordered_unique(values: Iterator[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
-
-
-def _write_kept_row(output: Any, row: Mapping[str, object]) -> None:
-    output.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _read_rows(
@@ -616,61 +617,6 @@ def _manifest_categories(
             return None
         categories[category] = count
     return categories
-
-
-def _read_manifest(path: Path) -> dict[str, Any] | None:
-    try:
-        # pragma: no mutate start
-        value = json.loads(path.read_text(encoding="utf-8"))
-        # pragma: no mutate end
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(value, dict):
-        return None
-    return value
-
-
-def _temporary_path(path: Path) -> Path:
-    descriptor, name = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    os.close(descriptor)
-    temporary = Path(name)
-    temporary.unlink()
-    return temporary
-
-
-def _atomic_json_write(path: Path, value: Mapping[str, object]) -> None:
-    temporary = _temporary_path(path)
-    try:
-        # pragma: no mutate start
-        temporary.write_text(
-            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        # pragma: no mutate end
-        os.replace(temporary, path)
-    except BaseException:
-        temporary.unlink(missing_ok=True)  # pragma: no mutate
-        raise
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        # pragma: no mutate start
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-        # pragma: no mutate end
-    return digest.hexdigest()
-
-
-def _open_text_output(path: Path) -> Any:
-    # pragma: no mutate start
-    return path.open("w", encoding="utf-8", newline="\n")
-    # pragma: no mutate end
 
 
 def _open_text_input(path: Path) -> Any:

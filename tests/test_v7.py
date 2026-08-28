@@ -10,6 +10,7 @@ from typing import cast
 
 import pytest
 
+import fineweb_polygons.artifact_io as artifact_io
 import fineweb_polygons.v7 as v7_module
 from fineweb_polygons.v7 import V7RunConfig, run_v7
 
@@ -504,7 +505,7 @@ def test_temporary_path_stays_next_to_target_and_is_removed(tmp_path: Path) -> N
     target = tmp_path / "nested" / "v7.jsonl"
     target.parent.mkdir()
 
-    temporary = v7_module._temporary_path(target)
+    temporary = artifact_io.temporary_path(target)
 
     assert temporary.parent == target.parent
     assert temporary.name.startswith(f".{target.name}.")
@@ -598,7 +599,7 @@ def test_atomic_json_write_removes_temporary_file_on_replace_failure(
         raise OSError("replace failed")
 
     monkeypatch.setattr(Path, "unlink", recording_unlink)
-    monkeypatch.setattr(v7_module.os, "replace", fail_replace)
+    monkeypatch.setattr(artifact_io.os, "replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
         v7_module._atomic_json_write(tmp_path / "manifest.json", {"ok": True})
