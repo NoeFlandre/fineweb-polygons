@@ -859,6 +859,7 @@ def test_v10_native_classifier_uses_chat_template_and_greedy_generation(
 
     _FakeNativeTokenizer.pretrained_args = []
     _FakeNativeModel.pretrained_args = []
+    _FakeTorch.backends.mps.available = True
     classifier = LfmSentenceClassifier(model_path, max_new_tokens=1)
     assert classifier.classify(["first", "second"]) == ("yes", "no")
     assert classifier.classify([]) == ()
