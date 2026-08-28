@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO, TypeGuard, cast
@@ -63,6 +64,9 @@ _V10_REMOVED_OUTPUT_FIELDS = frozenset(
         "topic_terms",
     )
 )
+_MODEL_RECORD_CACHE: dict[
+    Path, tuple[tuple[tuple[str, int, int], ...], dict[str, object]]
+] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,23 +248,51 @@ def _build_classifier(
 
 
 def _model_record(model_path: Path) -> dict[str, object]:
-    files = tuple(
+    resolved_model_path = model_path.expanduser().resolve()
+    files = _model_files(resolved_model_path)
+    inventory = _model_inventory(resolved_model_path, files)
+    cached = _MODEL_RECORD_CACHE.get(resolved_model_path)
+    if cached is not None and cached[0] == inventory:
+        return deepcopy(cached[1])
+    file_records = tuple(
         {
-            "path": str(path.relative_to(model_path)),
+            "path": str(path.relative_to(resolved_model_path)),
             "sha256": _sha256_file(path),
         }
+        for path in files
+    )
+    fingerprint = hashlib.sha256(
+        json.dumps(file_records, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    record = {
+        "path": str(resolved_model_path),
+        "snapshot_id": resolved_model_path.name,
+        "files": list(file_records),
+        "sha256": fingerprint,
+    }
+    _MODEL_RECORD_CACHE[resolved_model_path] = (inventory, record)
+    return deepcopy(record)
+
+
+def _model_files(model_path: Path) -> tuple[Path, ...]:
+    return tuple(
+        path
         for path in sorted(model_path.rglob("*"))
         if path.is_file() and ".incomplete-" not in path.name
     )
-    fingerprint = hashlib.sha256(
-        json.dumps(files, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
-    return {
-        "path": str(model_path),
-        "snapshot_id": model_path.name,
-        "files": list(files),
-        "sha256": fingerprint,
-    }
+
+
+def _model_inventory(
+    model_path: Path, files: Sequence[Path]
+) -> tuple[tuple[str, int, int], ...]:
+    return tuple(
+        (
+            str(path.relative_to(model_path)),
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+        )
+        for path in files
+    )
 
 
 def _checkpoint_header(
@@ -284,6 +316,7 @@ def _checkpoint_header(
             "max_new_tokens": config.max_new_tokens,
             "prompt_sha256": PROMPT_SHA256,
             "assistant_prefill": REASONING_CLOSE_TAG,
+            "deduplicate_exact_sentences": True,
         },
     }
 
@@ -383,6 +416,7 @@ def _write_output(
         _append_checkpoint(checkpoint_path) as checkpoint_output,
     ):
         pending: list[_PendingRow] = []
+        label_cache: dict[str, str] = {}
         pending_size = 0
         for candidate in _read_rows(input_path):
             stats.record_seen(len(candidate.sentences))
@@ -397,6 +431,7 @@ def _write_output(
                     output=output,
                     checkpoint_output=checkpoint_output,
                     checkpoint=checkpoint,
+                    label_cache=label_cache,
                     stats=stats,
                 )
                 pending = []
@@ -408,6 +443,7 @@ def _write_output(
                 output=output,
                 checkpoint_output=checkpoint_output,
                 checkpoint=checkpoint,
+                label_cache=label_cache,
                 stats=stats,
             )
 
@@ -419,10 +455,14 @@ def _classify_pending(
     output: TextIO,
     checkpoint_output: TextIO,
     checkpoint: dict[int, tuple[str, ...]],
+    label_cache: dict[str, str],
     stats: _OutputStats,
 ) -> None:
+    for item in pending:
+        if item.labels is not None:
+            label_cache.update(zip(item.candidate.sentences, item.labels, strict=False))
     unknown = tuple(item for item in pending if item.labels is None)
-    labels = _classify_sentences(unknown, classifier)
+    labels = _classify_sentences(unknown, classifier, label_cache)
     _save_classifications(
         unknown,
         labels,
@@ -433,16 +473,22 @@ def _classify_pending(
 
 
 def _classify_sentences(
-    pending: Sequence[_PendingRow], classifier: SentenceClassifier
+    pending: Sequence[_PendingRow],
+    classifier: SentenceClassifier,
+    label_cache: dict[str, str],
 ) -> tuple[str, ...]:
     sentences = tuple(
         sentence for item in pending for sentence in item.candidate.sentences
     )
-    labels = tuple(classifier.classify(sentences))
-    _validate_labels(labels)
-    if len(labels) != len(sentences):
+    uncached = tuple(
+        dict.fromkeys(sentence for sentence in sentences if sentence not in label_cache)
+    )
+    new_labels = tuple(classifier.classify(uncached)) if uncached else ()
+    _validate_labels(new_labels)
+    if len(new_labels) != len(uncached):
         raise ValueError("Classifier returned a label count different from its input")
-    return labels
+    label_cache.update(zip(uncached, new_labels, strict=False))
+    return tuple(label_cache[sentence] for sentence in sentences)
 
 
 def _save_classifications(
@@ -622,6 +668,7 @@ def _manifest_record(
             "output_field": "sentences_with_topic_term",
             "kept_label": "yes",
             "discarded_label": "no",
+            "deduplicate_exact_sentences": True,
             "label_contract": "exact lowercase yes or no",
             "prompt_template": V10_PROMPT_TEMPLATE,
             "prompt_sha256": PROMPT_SHA256,
@@ -770,6 +817,7 @@ def _manifest_matches(
             classification.get("output_field") == "sentences_with_topic_term",
             classification.get("prompt_sha256") == PROMPT_SHA256,
             classification.get("assistant_prefill") == REASONING_CLOSE_TAG,
+            classification.get("deduplicate_exact_sentences") is True,
             classification.get("batch_size") == config.batch_size,
             classification.get("max_new_tokens") == config.max_new_tokens,
             classification.get("model") == model_record,

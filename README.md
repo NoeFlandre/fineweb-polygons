@@ -308,6 +308,13 @@ hash, checkpoint hash, and result hash are recorded in each manifest. The
 checkpoint is local and resumable; model files, raw data, logs, and
 checkpoints are not uploaded.
 
+For speed, the default run uses deterministic greedy generation with the
+`</think>` prefill and only four post-prefill tokens, and sends sentences in
+batches of eight. Exact duplicate sentence strings are classified once per
+run, including labels restored from a checkpoint. These are runtime
+optimizations only: the V10 prompt, label contract, selection rule, output
+schema, and reproducibility fingerprints remain unchanged.
+
 On the first shard, V10 kept 21 of 29 Monaco V9 rows and wrote 62 `yes`
 sentences. It kept 3 of 4 Liechtenstein V9 rows and wrote 4 `yes` sentences.
 

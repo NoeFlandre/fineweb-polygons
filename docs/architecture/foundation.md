@@ -109,6 +109,13 @@ settings, checkpoint hash, and final result hash are saved in the manifest.
 The native source model and the derived Seagate MLX q4 runtime are local
 inputs, not public dataset files.
 
+The default runtime is optimized for the exact binary-label contract: it uses
+the `</think>` prefill, a four-token generation cap, batches of eight, and an
+in-run exact-string label cache. The cache reuses labels for duplicate
+sentences, including labels recovered from a resumable checkpoint. These
+optimizations do not change the prompt, accepted labels, row order, or output
+schema.
+
 ## Logging contract
 
 Each run must have a dedicated log path on the Seagate volume. Logs should include timestamps, severity, run ID, work-unit identity, input reference, event name, and enough exception context to diagnose a failed restart. Human-readable console output may be derived from the same events; it must not be the only record.

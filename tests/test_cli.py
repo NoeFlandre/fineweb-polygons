@@ -690,7 +690,7 @@ def test_cli_parser_exposes_the_v10_model_filter_command() -> None:
             "model",
         ]
     )
-    assert defaults.max_new_tokens == 512
+    assert defaults.max_new_tokens == 4
 
 
 @pytest.mark.parametrize(

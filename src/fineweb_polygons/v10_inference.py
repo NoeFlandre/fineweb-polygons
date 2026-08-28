@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from fineweb_polygons.v10_models import V10_MAX_NEW_TOKENS
+
 V10_PROMPT_TEMPLATE = (
     "Classify whether the TARGET SENTENCE contains information about the target "
     "place that could help characterize its land use, land cover, or geographic "
@@ -82,7 +84,9 @@ def parse_label(raw_output: str) -> str:
 class LfmSentenceClassifier:
     """Run the local LiquidAI LFM model once per batch of sentences."""
 
-    def __init__(self, model_path: Path, *, max_new_tokens: int = 2) -> None:
+    def __init__(
+        self, model_path: Path, *, max_new_tokens: int = V10_MAX_NEW_TOKENS
+    ) -> None:
         if not model_path.is_dir():
             raise FileNotFoundError(model_path)
         if max_new_tokens < 1:
@@ -144,7 +148,9 @@ class LfmSentenceClassifier:
 class MlxSentenceClassifier:
     """Run a Seagate-backed MLX LFM runtime with continuous batching."""
 
-    def __init__(self, model_path: Path, *, max_new_tokens: int = 512) -> None:
+    def __init__(
+        self, model_path: Path, *, max_new_tokens: int = V10_MAX_NEW_TOKENS
+    ) -> None:
         if not model_path.is_dir():
             raise FileNotFoundError(model_path)
         if max_new_tokens < 1:

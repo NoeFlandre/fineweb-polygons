@@ -206,6 +206,7 @@ def test_run_v10_publishes_only_yes_sentences_and_aligned_metadata(
         config.effective_checkpoint_path
     )
     assert manifest["classification"]["discarded_label"] == "no"
+    assert manifest["classification"]["deduplicate_exact_sentences"] is True
     assert manifest["classification"]["label_contract"] == ("exact lowercase yes or no")
     assert manifest["classification"]["prompt_template"] == (
         inference_module.V10_PROMPT_TEMPLATE
@@ -425,8 +426,8 @@ def test_v10_builds_the_native_or_mlx_classifier_from_runtime_configuration(
     v10_module._build_classifier(explicit, runtime)
 
     assert calls == [
-        ("native", config.model_path, 512),
-        ("mlx", runtime, 512),
+        ("native", config.model_path, 4),
+        ("mlx", runtime, 4),
     ]
 
 
@@ -472,6 +473,33 @@ def test_v10_model_record_contains_file_and_snapshot_fingerprints(
     ]
 
 
+def test_v10_model_record_reuses_an_unchanged_snapshot_and_invalidates_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    config_path = model_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    original_sha256_file = v10_module._sha256_file
+    hashed_paths = []
+
+    def recording_sha256_file(path):
+        hashed_paths.append(path)
+        return original_sha256_file(path)
+
+    monkeypatch.setattr(v10_module, "_sha256_file", recording_sha256_file)
+    v10_module._MODEL_RECORD_CACHE.clear()
+
+    first = v10_module._model_record(model_path)
+    second = v10_module._model_record(model_path)
+    assert first == second
+    assert hashed_paths == [config_path]
+
+    config_path.write_text('{"changed": true}', encoding="utf-8")
+    v10_module._model_record(model_path)
+    assert hashed_paths == [config_path, config_path]
+
+
 def test_v10_checkpoint_header_contains_the_reproducibility_contract(
     tmp_path: Path,
 ) -> None:
@@ -500,6 +528,7 @@ def test_v10_checkpoint_header_contains_the_reproducibility_contract(
             "max_new_tokens": config.max_new_tokens,
             "prompt_sha256": v10_module.PROMPT_SHA256,
             "assistant_prefill": inference_module.REASONING_CLOSE_TAG,
+            "deduplicate_exact_sentences": True,
         },
     }
 
@@ -892,6 +921,7 @@ def test_v10_native_classifier_rejects_wrong_label_count(
 
     with pytest.raises(RuntimeError, match="wrong number"):
         classifier.classify(["first", "second"])
+    assert classifier._model.generate_kwargs["max_new_tokens"] == 4
 
 
 def test_v10_mlx_classifier_batches_and_validates_labels(
@@ -946,15 +976,22 @@ def test_v10_mlx_classifier_rejects_wrong_label_count(
     class Result:
         texts = ("yes",)
 
+    calls = []
+
+    def batch_generate(*args, **kwargs):
+        calls.append(kwargs)
+        return Result()
+
     monkeypatch.setattr(
         inference_module,
         "_load_mlx",
-        lambda: (lambda path: ("model", Tokenizer()), lambda *args, **kwargs: Result()),
+        lambda: (lambda path: ("model", Tokenizer()), batch_generate),
     )
     classifier = MlxSentenceClassifier(model_path)
 
     with pytest.raises(RuntimeError, match="wrong number"):
         classifier.classify(["first", "second"])
+    assert calls[0]["max_tokens"] == 4
 
 
 @pytest.mark.parametrize(
@@ -1091,6 +1128,36 @@ def test_v10_write_output_preserves_batch_boundaries_and_newline_contract(
         ("sentence-0", "sentence-1"),
         ("sentence-2", "sentence-3"),
     ]
+
+
+def test_v10_classification_reuses_exact_duplicate_sentences() -> None:
+    candidates = [
+        v10_module._CandidateRow(
+            1,
+            {},
+            ("same", "first unique"),
+            ({}, {}),
+        ),
+        v10_module._CandidateRow(
+            2,
+            {},
+            ("same", "second unique"),
+            ({}, {}),
+        ),
+    ]
+    pending = [v10_module._PendingRow(candidate, None) for candidate in candidates]
+    classifier = _FakeClassifier(["yes", "no", "yes"])
+    cache: dict[str, str] = {}
+
+    labels = v10_module._classify_sentences(pending, classifier, cache)
+
+    assert labels == ("yes", "no", "yes", "yes")
+    assert classifier.calls == [("same", "first unique", "second unique")]
+    assert cache == {
+        "same": "yes",
+        "first unique": "no",
+        "second unique": "yes",
+    }
 
 
 def test_v10_saves_aligned_checkpoint_classifications() -> None:

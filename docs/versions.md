@@ -232,9 +232,10 @@ including observable natural or built proxies.
 
 - The prompt is recorded verbatim and identified by SHA-256 in the manifest.
 - Inference is deterministic greedy generation with a batch size of 8 and a
-  maximum of 512 new tokens. The LFM chat template is used, followed by a
+  maximum of 4 new tokens. The LFM chat template is used, followed by a
   `</think>` assistant prefill so the model's final answer can be read without
-  spending the output budget on reasoning.
+  spending the output budget on reasoning. Exact duplicate sentence strings
+  are classified once per run and their labels are reused.
 - The only accepted labels are exact lowercase `yes` and `no`. A malformed or
   ambiguous model answer fails the run; it is never treated as `no`.
 - Publish only sentences labeled `yes`. Drop a document when it has no `yes`
