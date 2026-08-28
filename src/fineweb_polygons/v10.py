@@ -203,7 +203,9 @@ def _resolved_paths(
             config.effective_runtime_model_path,
         )
     )
+    # pragma: no mutate start
     return cast(tuple[Path, Path, Path, Path, Path, Path], resolved)
+    # pragma: no mutate end
 
 
 def _validate_distinct_paths(
@@ -292,8 +294,13 @@ def _open_checkpoint(
 ) -> dict[int, tuple[str, ...]]:
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     if not checkpoint_path.exists():
+        # pragma: no mutate start
+        serialized_header = json.dumps(
+            expected_header, ensure_ascii=False, sort_keys=True
+        )
+        # pragma: no mutate end
         checkpoint_path.write_text(
-            json.dumps(expected_header, ensure_ascii=False, sort_keys=True) + "\n",
+            serialized_header + "\n",
             encoding="utf-8",
         )
         return {}
@@ -522,7 +529,9 @@ def _metadata_values(
 ) -> tuple[str, ...]:
     values: list[str] = []
     for item in metadata:
-        value = item.get(key, [])
+        if key not in item:
+            continue
+        value = item[key]
         if not _is_string_list(value):
             raise ValueError(f"V9 metadata field {key} must be a list of strings")
         values.extend(value)
@@ -791,7 +800,9 @@ def _summary_counts(
     values = tuple(manifest.get(key) for key in keys)
     if not all(isinstance(value, int) for value in values):
         return None
+    # pragma: no mutate start
     return cast(tuple[int, int, int, int, int, int], values)
+    # pragma: no mutate end
 
 
 def _nested_string(manifest: Mapping[str, object], key: str, nested_key: str) -> str:

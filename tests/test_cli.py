@@ -847,6 +847,65 @@ def test_cli_reports_v10_runner_errors_to_stderr(tmp_path: Path, capsys) -> None
     assert captured.err == "error: bad V10 input\n"
 
 
+def test_cli_v10_serialization_is_utf8_and_sorted(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "external"
+    result_path = data_root / "résultats" / "v10.jsonl"
+    manifest_path = data_root / "runs" / "v10" / "manifest.json"
+    checkpoint_path = data_root / "runs" / "v10" / "checkpoint.jsonl"
+
+    def fake_runner(config):
+        return V10RunSummary(
+            output_path=result_path,
+            manifest_path=manifest_path,
+            checkpoint_path=checkpoint_path,
+            rows_processed=2,
+            rows_kept=1,
+            rows_filtered=1,
+            candidate_sentences_processed=3,
+            yes_sentences_written=1,
+            no_sentences=2,
+            result_sha256="result-sha",
+        )
+
+    assert (
+        main(
+            [
+                "filter-v10",
+                "--data-root",
+                str(data_root),
+                "--input",
+                str(data_root / "v9.jsonl"),
+                "--output",
+                str(result_path),
+                "--manifest",
+                str(manifest_path),
+                "--model-path",
+                str(data_root / "model"),
+                "--checkpoint",
+                str(checkpoint_path),
+            ],
+            v10_runner=fake_runner,
+        )
+        == 0
+    )
+
+    expected = {
+        "candidate_sentences_processed": 3,
+        "checkpoint_path": str(checkpoint_path),
+        "manifest_path": str(manifest_path),
+        "no_sentences": 2,
+        "output_path": str(result_path),
+        "result_sha256": "result-sha",
+        "rows_filtered": 1,
+        "rows_kept": 1,
+        "rows_processed": 2,
+        "yes_sentences_written": 1,
+    }
+    assert capsys.readouterr().out == (
+        json.dumps(expected, ensure_ascii=False, sort_keys=True) + "\n"
+    )
+
+
 def test_cli_runs_v9_sentence_topic_filter_and_serializes_its_summary(
     tmp_path: Path, capsys
 ) -> None:

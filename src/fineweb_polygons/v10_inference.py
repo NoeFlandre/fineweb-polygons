@@ -72,13 +72,10 @@ def _is_token_ids(value: object) -> bool:
 def parse_label(raw_output: str) -> str:
     """Accept only the exact lowercase labels required by the contract."""
     label = raw_output.strip()
+    if "</think>" in label:
+        label = label.rpartition("</think>")[2].strip()
     if label not in {"yes", "no"}:
-        if "</think>" in label:
-            label = label.rpartition("</think>")[2].strip()
-        if label not in {"yes", "no"}:
-            raise ValueError(
-                f"Classifier output must be exactly yes or no: {raw_output!r}"
-            )
+        raise ValueError(f"Classifier output must be exactly yes or no: {raw_output!r}")
     return label
 
 

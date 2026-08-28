@@ -364,6 +364,19 @@ def test_v10_path_resolution_reports_missing_inputs_and_duplicate_runtime(
         v10_module._resolve_paths(cast(V10RunConfig, explicit))
 
 
+def test_v10_resolved_paths_are_absolute_and_ordered(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    assert v10_module._resolved_paths(config) == (
+        config.input_path.resolve(),
+        config.output_path.resolve(),
+        config.manifest_path.resolve(),
+        config.model_path.resolve(),
+        config.effective_checkpoint_path.resolve(),
+        config.effective_runtime_model_path.resolve(),
+    )
+
+
 def test_v10_distinct_path_validation_checks_the_checkpoint_and_exact_message(
     tmp_path: Path,
 ) -> None:
@@ -447,6 +460,7 @@ def test_v10_model_record_contains_file_and_snapshot_fingerprints(
     record = v10_module._model_record(model_path)
 
     assert record["snapshot_id"] == "model"
+    assert record["path"] == str(model_path)
     assert "sha256" in record
     assert isinstance(record["sha256"], str)
     assert len(record["sha256"]) == 64
@@ -470,14 +484,24 @@ def test_v10_checkpoint_header_contains_the_reproducibility_contract(
         runtime_model_record={"model": "runtime"},
     )
 
-    assert header["source_version"] == "v9"
-    assert header["source"] == {
-        "path": str(config.input_path),
-        "sha256": "source-sha",
+    assert header == {
+        "record_type": "header",
+        "schema_version": v10_module.V10_SCHEMA_VERSION,
+        "version": v10_module.V10_VERSION,
+        "source_version": v10_module.V10_SOURCE_VERSION,
+        "source": {
+            "path": str(config.input_path),
+            "sha256": "source-sha",
+        },
+        "model": {"model": "source"},
+        "runtime_model": {"model": "runtime"},
+        "classification": {
+            "batch_size": config.batch_size,
+            "max_new_tokens": config.max_new_tokens,
+            "prompt_sha256": v10_module.PROMPT_SHA256,
+            "assistant_prefill": inference_module.REASONING_CLOSE_TAG,
+        },
     }
-    assert header["classification"]["assistant_prefill"] == (
-        inference_module.REASONING_CLOSE_TAG
-    )
 
 
 def test_v10_checkpoint_parser_skips_blank_and_truncated_final_lines() -> None:
@@ -577,6 +601,7 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
 
     with pytest.raises(ValueError, match="topic_terms"):
         v10_module._metadata_values([{"topic_terms": "park"}], "topic_terms")
+    assert v10_module._metadata_values([{"topic_terms": ["park"]}], "missing") == ()
 
     with pytest.raises(ValueError) as error:
         v10_module._decode_input_line("[]", 4)
@@ -667,6 +692,16 @@ def test_v10_manifest_helpers_reject_malformed_records(tmp_path: Path) -> None:
         runtime_model_record=model_record,
     )
     assert v10_module._summary_counts({}) is None
+    assert v10_module._summary_counts(
+        {
+            "rows_processed": 1,
+            "rows_kept": 2,
+            "rows_filtered": 3,
+            "candidate_sentences_processed": 4,
+            "yes_sentences_written": 5,
+            "no_sentences": 6,
+        }
+    ) == (1, 2, 3, 4, 5, 6)
     records = v10_module._manifest_records({"source": True}, {"result": True})
     assert records == ({"source": True}, {"result": True})
     with pytest.raises(ValueError) as error:
@@ -726,6 +761,11 @@ def test_v10_label_parser_uses_the_last_reasoning_close_tag() -> None:
     assert parse_label("<think>first</think><think>second</think>yes") == "yes"
 
 
+@pytest.mark.parametrize("label", ["yes", "no"])
+def test_v10_label_parser_accepts_exact_contract_labels(label: str) -> None:
+    assert parse_label(label) == label
+
+
 class _FakeTorch:
     class backends:
         class mps:
@@ -764,9 +804,11 @@ class _FakeNativeTokenizer:
     pad_token_id = None
     eos_token = "eos"
     decoded_outputs: ClassVar[list[str]] = ["yes", "<think>reason</think>no"]
+    pretrained_args: ClassVar[list[tuple[object, dict[str, object]]]] = []
 
     @classmethod
     def from_pretrained(cls, path, **kwargs):
+        cls.pretrained_args.append((path, dict(kwargs)))
         return cls()
 
     def apply_chat_template(self, messages, **kwargs):
@@ -780,9 +822,17 @@ class _FakeNativeTokenizer:
 
 
 class _FakeNativeModel:
+    pretrained_args: ClassVar[list[tuple[object, dict[str, object]]]] = []
+
+    def __init__(self) -> None:
+        self.device = None
+        self.generate_kwargs: dict[str, object] = {}
+
     @classmethod
     def from_pretrained(cls, path, **kwargs):
-        return cls()
+        instance = cls()
+        cls.pretrained_args.append((path, dict(kwargs)))
+        return instance
 
     def to(self, device):
         self.device = device
@@ -792,6 +842,7 @@ class _FakeNativeModel:
         self.evaluated = True
 
     def generate(self, **kwargs):
+        self.generate_kwargs = dict(kwargs)
         return _FakeTensor()
 
 
@@ -806,9 +857,23 @@ def test_v10_native_classifier_uses_chat_template_and_greedy_generation(
         lambda: (_FakeTorch, _FakeNativeTokenizer, _FakeNativeModel),
     )
 
-    classifier = LfmSentenceClassifier(model_path, max_new_tokens=9)
+    _FakeNativeTokenizer.pretrained_args = []
+    _FakeNativeModel.pretrained_args = []
+    classifier = LfmSentenceClassifier(model_path, max_new_tokens=1)
     assert classifier.classify(["first", "second"]) == ("yes", "no")
     assert classifier.classify([]) == ()
+    assert _FakeNativeTokenizer.pretrained_args == [
+        (str(model_path), {"local_files_only": True})
+    ]
+    assert _FakeNativeModel.pretrained_args == [
+        (
+            str(model_path),
+            {"local_files_only": True, "low_cpu_mem_usage": True},
+        )
+    ]
+    assert classifier._model.device == "mps"
+    assert classifier._model.generate_kwargs["max_new_tokens"] == 1
+    assert classifier._model.generate_kwargs["do_sample"] is False
 
 
 def test_v10_native_classifier_rejects_wrong_label_count(
@@ -845,7 +910,10 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
     class Result:
         texts = ("yes", "no")
 
+    load_calls = []
+
     def load(path):
+        load_calls.append(path)
         return "model", Tokenizer()
 
     def batch_generate(model, tokenizer, prompts, **kwargs):
@@ -857,6 +925,7 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
 
     assert classifier.classify(["first", "second"]) == ("yes", "no")
     assert classifier.classify([]) == ()
+    assert load_calls == [str(model_path)]
     assert calls[0][3] == {"max_tokens": 11, "verbose": False}
 
 
@@ -914,8 +983,9 @@ def test_v10_lazy_runtime_loaders_report_missing_optional_dependencies(
     monkeypatch.setattr(inference_module.importlib, "import_module", missing_import)
     with pytest.raises(RuntimeError, match="torch and transformers"):
         inference_module._load_transformers()
-    with pytest.raises(RuntimeError, match="mlx-lm"):
+    with pytest.raises(RuntimeError) as error:
         inference_module._load_mlx()
+    assert str(error.value) == "V10 MLX inference requires the mlx-lm package"
 
 
 def test_v10_lazy_runtime_loaders_return_runtime_entrypoints(monkeypatch) -> None:
