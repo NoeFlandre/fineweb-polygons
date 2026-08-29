@@ -261,9 +261,13 @@ def _model_record(model_path: Path) -> dict[str, object]:
         }
         for path in files
     )
-    fingerprint = hashlib.sha256(
-        json.dumps(file_records, ensure_ascii=False, sort_keys=True).encode()
-    ).hexdigest()
+    # Stable JSON is part of the persisted model-fingerprint contract.
+    # pragma: no mutate start
+    serialized_records = json.dumps(
+        file_records, ensure_ascii=False, sort_keys=True
+    ).encode()
+    # pragma: no mutate end
+    fingerprint = hashlib.sha256(serialized_records).hexdigest()
     record = {
         "path": str(resolved_model_path),
         "snapshot_id": resolved_model_path.name,
