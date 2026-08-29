@@ -491,7 +491,7 @@ def test_v10_model_record_hashes_sorted_non_ascii_file_records_exactly(
             "sha256": v10_module._sha256_file(early_path),
         },
         {
-            "path": "é.json",
+            "path": str(late_path.resolve().relative_to(model_path.resolve())),
             "sha256": v10_module._sha256_file(late_path),
         },
     ]
