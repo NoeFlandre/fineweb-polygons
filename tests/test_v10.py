@@ -677,6 +677,9 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
     with pytest.raises(ValueError, match="topic_terms"):
         v10_module._metadata_values([{"topic_terms": "park"}], "topic_terms")
     assert v10_module._metadata_values([{"topic_terms": ["park"]}], "missing") == ()
+    assert v10_module._metadata_values(
+        [{}, {"topic_terms": ["park"]}], "topic_terms"
+    ) == ("park",)
 
     with pytest.raises(ValueError) as error:
         v10_module._decode_input_line("[]", 4)
@@ -1070,8 +1073,9 @@ def test_v10_native_classifier_rejects_wrong_label_count(
     classifier = LfmSentenceClassifier(model_path)
     classifier._tokenizer.decoded_outputs = ["yes"]
 
-    with pytest.raises(RuntimeError, match="wrong number"):
+    with pytest.raises(RuntimeError) as error:
         classifier.classify(["first", "second"])
+    assert str(error.value) == "The classifier returned the wrong number of labels"
     assert classifier._model.generate_kwargs["max_new_tokens"] == 4
 
 
@@ -1114,6 +1118,8 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
         format_prompt("first"),
         format_prompt("second"),
     ]
+    assert calls[0][0] == "model"
+    assert calls[0][1] is classifier._tokenizer
     assert calls[0][2] == [[1, 2], [1, 2]]
     assert load_calls == [str(model_path)]
     assert calls[0][3] == {"max_tokens": 11, "verbose": False}
@@ -1243,6 +1249,17 @@ def test_v10_runtime_helpers_select_devices_and_configure_padding() -> None:
     inference_module._configure_tokenizer(tokenizer)
     assert tokenizer.padding_side == "left"
     assert tokenizer.pad_token is None
+
+    class MissingPadTokenizer:
+        pad_token_id = None
+        pad_token = None
+        eos_token = "eos"
+        padding_side: str
+
+    missing_pad_tokenizer = MissingPadTokenizer()
+    inference_module._configure_tokenizer(missing_pad_tokenizer)
+    assert missing_pad_tokenizer.padding_side == "left"
+    assert missing_pad_tokenizer.pad_token == "eos"
 
 
 def test_v10_read_rows_uses_one_based_line_numbers_and_utf8(
