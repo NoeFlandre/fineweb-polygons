@@ -949,7 +949,9 @@ class _FakeNativeTokenizer:
     eos_token = "eos"
     decoded_outputs: ClassVar[list[str]] = ["yes", "<think>reason</think>no"]
     pretrained_args: ClassVar[list[tuple[object, dict[str, object]]]] = []
-    chat_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
+    chat_calls: ClassVar[
+        list[tuple[list[dict[str, object]], dict[str, object]]]
+    ] = []
     encode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
     decode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
 
