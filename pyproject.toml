@@ -73,5 +73,11 @@ quote-style = "double"
 source_paths = ["src/fineweb_polygons"]
 also_copy = ["scripts/"]
 on_dependency_change = "rerun"
-pytest_add_cli_args = ["-q", "-x", "--disable-warnings", "--tb=short"]
+pytest_add_cli_args = [
+    "--no-cov",
+    "-q",
+    "-x",
+    "--disable-warnings",
+    "--tb=short",
+]
 timeout_multiplier = 60.0

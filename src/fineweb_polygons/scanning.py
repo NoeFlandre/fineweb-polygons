@@ -173,6 +173,15 @@ def _scan_batch(
     matcher: EvidenceMatcher,
     output: TextIO,
 ) -> int:
+    columns = _arrow_columns(batch)
+    if columns is not None:
+        return _scan_arrow_columns(
+            columns,
+            row_start=row_start,
+            matcher=matcher,
+            output=output,
+            row_count=batch.num_rows,
+        )
     values = batch.to_pydict()
     ids = values.get("id", [None] * batch.num_rows)
     matches_written = 0
@@ -184,6 +193,41 @@ def _scan_batch(
             document_id=None if raw_id is None else str(raw_id),
             text=_as_text(raw_text),
             url=_as_text(raw_url),
+        )
+        matches_written += _write_matches(document, matcher, output)
+    return matches_written
+
+
+def _arrow_columns(batch: Any) -> tuple[Any, Any, Any | None] | None:
+    """Return Arrow columns without materializing a Python row dictionary."""
+    column = getattr(batch, "column", None)
+    if column is None:
+        return None
+    text_column = column("text")
+    url_column = column("url")
+    schema = getattr(batch, "schema", None)
+    names = getattr(schema, "names", ())
+    id_column = column("id") if "id" in names else None
+    return text_column, url_column, id_column
+
+
+def _scan_arrow_columns(
+    columns: tuple[Any, Any, Any | None],
+    *,
+    row_start: int,
+    matcher: EvidenceMatcher,
+    output: TextIO,
+    row_count: int,
+) -> int:
+    text_column, url_column, id_column = columns
+    matches_written = 0
+    for offset in range(row_count):
+        raw_id = None if id_column is None else id_column[offset].as_py()
+        document = FineWebDocument(
+            row_index=row_start + offset,
+            document_id=None if raw_id is None else str(raw_id),
+            text=_as_text(text_column[offset].as_py()),
+            url=_as_text(url_column[offset].as_py()),
         )
         matches_written += _write_matches(document, matcher, output)
     return matches_written

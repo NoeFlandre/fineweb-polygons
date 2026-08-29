@@ -26,9 +26,13 @@ class _MultiPatternMatcher:
         self._automaton.make_automaton()
 
     def find(self, value: str, *, decode_url: bool = True) -> frozenset[str]:
+        normalized = normalize_for_search(value, decode_url=decode_url)
+        return self.find_normalized(normalized)
+
+    def find_normalized(self, normalized: str) -> frozenset[str]:
+        """Find patterns in a value that already uses search normalization."""
         if not self._has_patterns:
             return frozenset()
-        normalized = normalize_for_search(value, decode_url=decode_url)
         if not normalized:
             return frozenset()
         padded = f" {normalized} "
@@ -38,9 +42,15 @@ class _MultiPatternMatcher:
         self, value: str, *, decode_url: bool = True
     ) -> dict[str, tuple[tuple[int, int], ...]]:
         """Return normalized half-open spans for every matched pattern."""
+        normalized = normalize_for_search(value, decode_url=decode_url)
+        return self.find_spans_normalized(normalized)
+
+    def find_spans_normalized(
+        self, normalized: str
+    ) -> dict[str, tuple[tuple[int, int], ...]]:
+        """Return spans for a value that already uses search normalization."""
         if not self._has_patterns:
             return {}
-        normalized = normalize_for_search(value, decode_url=decode_url)
         if not normalized:
             return {}
         padded = f" {normalized} "
@@ -100,13 +110,13 @@ class EvidenceMatcher:
         document: FineWebDocument,
         values: Mapping[str, str],
     ) -> tuple[MatchEvidence, ...]:
-        names_by_field = _find_names(values, self._name_matcher)
         contexts_by_field, context_phrase = _find_context(
             values, self._context_matcher, context_name=self._context_name
         )
-        accepted_names = _v3_accepted_names(names_by_field, contexts_by_field)
-        if context_phrase is None:
+        if context_phrase is None or not contexts_by_field.get("text"):
             return ()
+        names_by_field = _find_names(values, self._name_matcher)
+        accepted_names = _v3_accepted_names(names_by_field, contexts_by_field)
         if not accepted_names:
             return ()
         return _evidence_for_names(
@@ -167,13 +177,13 @@ class EvidenceMatcher:
         document: FineWebDocument,
         values: Mapping[str, str],
     ) -> tuple[MatchEvidence, ...]:
-        names_by_field = _find_names(values, self._name_matcher)
         contexts_by_field, _ = _find_context(
             values, self._context_matcher, context_name=self._context_name
         )
         if "text" not in contexts_by_field:
             return ()
         text_contexts = contexts_by_field["text"]
+        names_by_field = _find_names(values, self._name_matcher)
         accepted_names = set(names_by_field["text"])
         if not accepted_names:
             return ()
@@ -256,10 +266,13 @@ def _v6_text_spans(
     dict[str, tuple[tuple[int, int], ...]],
     dict[str, tuple[tuple[int, int], ...]],
 ]:
-    return (
-        name_matcher.find_spans(text, decode_url=False),
-        context_matcher.find_spans(text, decode_url=False),
-    )
+    # pragma: no mutate start
+    normalized = normalize_for_search(text, decode_url=False)
+    # pragma: no mutate end
+    text_context_spans = context_matcher.find_spans_normalized(normalized)
+    if not text_context_spans:
+        return {}, {}
+    return name_matcher.find_spans_normalized(normalized), text_context_spans
 
 
 def _accepted_v6_pairs(
@@ -299,8 +312,9 @@ def _v6_match_fields(
 ) -> tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]:
     # Keep URL decoding explicit: V6 text spans select the row, while URL
     # matches are retained only as secondary metadata.
+    normalized_url = normalize_for_search(values["url"])
     # pragma: no mutate start
-    url_names = name_matcher.find(values["url"], decode_url=True)
+    url_names = name_matcher.find_normalized(normalized_url)
     # pragma: no mutate end
     names_by_field = {
         "text": frozenset(text_name_spans),
@@ -308,7 +322,7 @@ def _v6_match_fields(
     }
     contexts_by_field = {"text": frozenset(text_context_spans)}
     # pragma: no mutate start
-    url_contexts = context_matcher.find(values["url"], decode_url=True)
+    url_contexts = context_matcher.find_normalized(normalized_url)
     # pragma: no mutate end
     if url_contexts:
         contexts_by_field["url"] = url_contexts

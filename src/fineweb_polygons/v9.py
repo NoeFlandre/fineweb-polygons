@@ -278,11 +278,11 @@ def _sentence_evidence(
     vocabulary: TopicVocabulary,
     context_window: int,
 ) -> dict[str, object] | None:
-    matches = vocabulary.match_text(sentence)
-    if not matches:
-        return None
     polygon_distance = _nearest_distance(sentence_index, polygon_indices)
     if not _within_context_window(polygon_distance, context_window):
+        return None
+    matches = vocabulary.match_text(sentence)
+    if not matches:
         return None
     country_distance = _nearest_distance(sentence_index, country_indices)
     return _sentence_evidence_record(

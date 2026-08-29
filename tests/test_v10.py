@@ -949,9 +949,7 @@ class _FakeNativeTokenizer:
     eos_token = "eos"
     decoded_outputs: ClassVar[list[str]] = ["yes", "<think>reason</think>no"]
     pretrained_args: ClassVar[list[tuple[object, dict[str, object]]]] = []
-    chat_calls: ClassVar[
-        list[tuple[list[dict[str, object]], dict[str, object]]]
-    ] = []
+    chat_calls: ClassVar[list[tuple[list[dict[str, object]], dict[str, object]]]] = []
     encode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
     decode_calls: ClassVar[list[tuple[object, dict[str, object]]]] = []
 
@@ -1116,6 +1114,7 @@ def test_v10_mlx_classifier_batches_and_validates_labels(
         format_prompt("first"),
         format_prompt("second"),
     ]
+    assert calls[0][2] == [[1, 2], [1, 2]]
     assert load_calls == [str(model_path)]
     assert calls[0][3] == {"max_tokens": 11, "verbose": False}
 
@@ -1149,8 +1148,9 @@ def test_v10_mlx_classifier_rejects_wrong_label_count(
     )
     classifier = MlxSentenceClassifier(model_path)
 
-    with pytest.raises(RuntimeError, match="wrong number"):
+    with pytest.raises(RuntimeError) as error:
         classifier.classify(["first", "second"])
+    assert str(error.value) == "The classifier returned the wrong number of labels"
     assert calls[0]["max_tokens"] == 4
 
 
@@ -1164,8 +1164,9 @@ def test_v10_mlx_classifier_rejects_wrong_label_count(
 def test_v10_model_wrappers_validate_model_path_and_token_limit(
     tmp_path: Path, factory, message: str
 ) -> None:
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError) as error:
         factory(tmp_path / "missing")
+    assert str(error.value) == str(tmp_path / "missing")
     model_path = tmp_path / factory.__name__
     model_path.mkdir()
     with pytest.raises(ValueError) as error:

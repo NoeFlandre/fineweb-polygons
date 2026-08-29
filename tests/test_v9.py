@@ -385,6 +385,28 @@ def test_v9_private_helpers_enforce_distance_and_anchor_contracts() -> None:
     )
 
 
+def test_v9_skips_topic_matching_outside_the_polygon_context_window() -> None:
+    calls: list[str] = []
+
+    class Vocabulary:
+        def match_text(self, sentence: str):
+            calls.append(sentence)
+            return (SimpleNamespace(category="land_use", term="park"),)
+
+    assert (
+        v9_module._sentence_evidence(
+            4,
+            "A park.",
+            polygon_indices=(0,),
+            country_indices=(),
+            vocabulary=cast(v9_module.TopicVocabulary, Vocabulary()),
+            context_window=1,
+        )
+        is None
+    )
+    assert calls == []
+
+
 def test_v9_place_matching_disables_url_decoding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

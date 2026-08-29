@@ -305,6 +305,131 @@ def test_scan_batch_without_ids_uses_none_document_ids() -> None:
     assert documents == [FineWebDocument(0, None, "text", "url")]
 
 
+def test_scan_batch_reads_arrow_columns_without_building_a_python_dict() -> None:
+    documents: list[FineWebDocument] = []
+
+    class Scalar:
+        def __init__(self, value):
+            self.value = value
+
+        def as_py(self):
+            return self.value
+
+    class Column:
+        def __init__(self, values):
+            self.values = values
+
+        def __getitem__(self, index):
+            return Scalar(self.values[index])
+
+    class Batch:
+        num_rows = 1
+        schema = type("Schema", (), {"names": ("text", "url", "id")})()
+
+        def column(self, name):
+            return Column({"text": ["text"], "url": ["url"], "id": ["doc-0"]}[name])
+
+        def to_pydict(self):
+            raise AssertionError("scan batches should use Arrow columns directly")
+
+    class RecordingMatcher:
+        def match(self, document: FineWebDocument) -> tuple[object, ...]:
+            documents.append(document)
+            return ()
+
+    assert (
+        _scan_batch(
+            cast(Any, Batch()),
+            row_start=0,
+            matcher=cast(Any, RecordingMatcher()),
+            output=StringIO(),
+        )
+        == 0
+    )
+    assert documents == [FineWebDocument(0, "doc-0", "text", "url")]
+
+
+def test_scan_batch_arrow_columns_without_schema_metadata_use_no_id() -> None:
+    documents: list[FineWebDocument] = []
+
+    class Scalar:
+        def __init__(self, value):
+            self.value = value
+
+        def as_py(self):
+            return self.value
+
+    class Column:
+        def __init__(self, values):
+            self.values = values
+
+        def __getitem__(self, index):
+            return Scalar(self.values[index])
+
+    class BatchWithoutSchema:
+        num_rows = 1
+
+        def column(self, name):
+            return Column({"text": ["text"], "url": ["url"]}[name])
+
+    class BatchWithoutNames:
+        num_rows = 1
+        schema = object()
+
+        def column(self, name):
+            return Column({"text": ["text"], "url": ["url"]}[name])
+
+    class RecordingMatcher:
+        def match(self, document: FineWebDocument) -> tuple[object, ...]:
+            documents.append(document)
+            return ()
+
+    for row_start, batch in enumerate((BatchWithoutSchema(), BatchWithoutNames())):
+        assert (
+            _scan_batch(
+                cast(Any, batch),
+                row_start=row_start,
+                matcher=cast(Any, RecordingMatcher()),
+                output=StringIO(),
+            )
+            == 0
+        )
+
+    assert documents == [
+        FineWebDocument(0, None, "text", "url"),
+        FineWebDocument(1, None, "text", "url"),
+    ]
+
+
+def test_scan_batch_accumulates_and_writes_fallback_matches() -> None:
+    class Match:
+        def to_record(self):
+            return {"matched": True}
+
+    class RecordingMatcher:
+        def match(self, document: FineWebDocument) -> tuple[Match, ...]:
+            del document
+            return (Match(),)
+
+    class Batch:
+        num_rows = 2
+
+        def to_pydict(self):
+            return {"text": ["first", "second"], "url": ["", ""]}
+
+    output = StringIO()
+    assert (
+        _scan_batch(
+            cast(Any, Batch()),
+            row_start=4,
+            matcher=cast(Any, RecordingMatcher()),
+            output=output,
+        )
+        == 2
+    )
+    assert output.getvalue() == '{"matched": true}\n{"matched": true}\n'
+
+
 def test_write_matches_uses_stable_unicode_json(monkeypatch) -> None:
     class Match:
         def to_record(self):

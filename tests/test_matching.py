@@ -120,26 +120,121 @@ def test_span_helper_decodes_urls_only_when_requested() -> None:
 
 def test_v6_text_span_helper_passes_false_url_decoding_to_both_matchers() -> None:
     class FakeMatcher:
-        def __init__(self) -> None:
+        def __init__(self, result: dict[str, tuple[tuple[int, int], ...]]) -> None:
             self.decode_flags: list[bool] = []
+            self.result = result
 
-        def find_spans(
-            self, value: str, *, decode_url: bool = True
+        def find_spans_normalized(
+            self, value: str
         ) -> dict[str, tuple[tuple[int, int], ...]]:
             del value
-            self.decode_flags.append(decode_url)
-            return {}
+            self.decode_flags.append(False)
+            return self.result
 
-    name_matcher = FakeMatcher()
-    context_matcher = FakeMatcher()
+    name_matcher = FakeMatcher({})
+    context_matcher = FakeMatcher({"monaco": ((0, 6),)})
 
     assert _v6_text_spans(
         "text",
         cast(_MultiPatternMatcher, name_matcher),
         cast(_MultiPatternMatcher, context_matcher),
-    ) == ({}, {})
+    ) == ({}, {"monaco": ((0, 6),)})
     assert name_matcher.decode_flags == [False]
     assert context_matcher.decode_flags == [False]
+
+
+def test_v6_text_spans_do_not_decode_percent_escapes() -> None:
+    assert _v6_text_spans(
+        "Fontv%69eille in Monaco",
+        _MultiPatternMatcher(("fontvieille",)),
+        _MultiPatternMatcher(("monaco",)),
+    ) == ({}, {"monaco": ((17, 23),)})
+
+
+def test_v6_skips_name_search_when_text_has_no_country_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        max_name_country_distance=500,
+    )
+
+    def fail_name_search(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("name search should be deferred until context matches")
+
+    monkeypatch.setattr(matcher._name_matcher, "find_spans", fail_name_search)
+    monkeypatch.setattr(
+        matcher._name_matcher,
+        "find_spans_normalized",
+        fail_name_search,
+        raising=False,
+    )
+
+    assert matcher.match(FineWebDocument(25, "doc-25", "Fontvieille only.", "")) == ()
+
+
+def test_v3_skips_name_search_when_text_has_no_country_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_url_name=True,
+    )
+
+    def fail_name_search(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("name search should be deferred until context matches")
+
+    monkeypatch.setattr(matcher._name_matcher, "find", fail_name_search)
+
+    assert matcher.match(FineWebDocument(25, "doc-25", "Fontvieille only.", "")) == ()
+
+
+def test_v3_skips_name_search_when_country_context_is_only_in_the_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_url_name=True,
+    )
+
+    def fail_name_search(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError(
+            "name search should be deferred until text context matches"
+        )
+
+    monkeypatch.setattr(matcher._name_matcher, "find", fail_name_search)
+
+    assert (
+        matcher.match(
+            FineWebDocument(
+                25,
+                "doc-25",
+                "Fontvieille only.",
+                "https://monaco.example.test/fontvieille",
+            )
+        )
+        == ()
+    )
+
+
+def test_v4_skips_name_search_when_text_has_no_country_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    matcher = EvidenceMatcher(
+        [PolygonProfile.create("way/1", "Fontvieille")],
+        require_text_name=True,
+    )
+
+    def fail_name_search(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("name search should be deferred until context matches")
+
+    monkeypatch.setattr(matcher._name_matcher, "find", fail_name_search)
+
+    assert matcher.match(FineWebDocument(25, "doc-25", "Fontvieille only.", "")) == ()
 
 
 def test_v6_keeps_url_matches_as_metadata_only() -> None:
@@ -629,6 +724,13 @@ def test_span_distance_handles_both_directions_and_overlap() -> None:
     assert _span_distance((0, 10), (5, 12)) == 0
     assert _span_distance((5, 7), (1, 3)) == 2
     assert _span_distance((1, 3), (5, 7)) == 2
+
+
+def test_multi_pattern_matcher_searches_already_normalized_values() -> None:
+    matcher = _MultiPatternMatcher(("monaco",))
+
+    assert matcher.find_normalized("monaco") == frozenset({"monaco"})
+    assert matcher.find_spans_normalized("monaco") == {"monaco": ((0, 6),)}
 
 
 def test_closest_span_pair_prefers_the_smallest_distance() -> None:
