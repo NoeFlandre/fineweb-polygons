@@ -262,7 +262,7 @@ def _model_record(model_path: Path) -> dict[str, object]:
         for path in files
     )
     fingerprint = hashlib.sha256(
-        json.dumps(file_records, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        json.dumps(file_records, ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
     record = {
         "path": str(resolved_model_path),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Sequence
 from contextlib import contextmanager
@@ -205,6 +206,7 @@ def test_run_v10_publishes_only_yes_sentences_and_aligned_metadata(
     assert manifest["checkpoint"]["sha256"] == v10_module._sha256_file(
         config.effective_checkpoint_path
     )
+    assert manifest["classification"]["kept_label"] == "yes"
     assert manifest["classification"]["discarded_label"] == "no"
     assert manifest["classification"]["label_contract"] == ("exact lowercase yes or no")
     assert manifest["classification"]["prompt_template"] == (
@@ -472,6 +474,47 @@ def test_v10_model_record_contains_file_and_snapshot_fingerprints(
     ]
 
 
+def test_v10_model_record_hashes_sorted_non_ascii_file_records_exactly(
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    late_path = model_path / "é.json"
+    early_path = model_path / "a.json"
+    late_path.write_text("été", encoding="utf-8")
+    early_path.write_text("alpha", encoding="utf-8")
+
+    record = v10_module._model_record(model_path)
+    expected_files = [
+        {
+            "path": "a.json",
+            "sha256": v10_module._sha256_file(early_path),
+        },
+        {
+            "path": "é.json",
+            "sha256": v10_module._sha256_file(late_path),
+        },
+    ]
+    expected_sha256 = hashlib.sha256(
+        json.dumps(expected_files, ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
+
+    assert record["files"] == expected_files
+    assert record["sha256"] == expected_sha256
+
+
+def test_v10_model_inventory_uses_relative_file_metadata(tmp_path: Path) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    config_path = model_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    stat = config_path.stat()
+
+    assert v10_module._model_inventory(model_path, (config_path,)) == (
+        ("config.json", stat.st_size, stat.st_mtime_ns),
+    )
+
+
 def test_v10_model_record_reuses_an_unchanged_snapshot_and_invalidates_changes(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -647,6 +690,37 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
     assert str(error.value) == "Classifier labels must be exactly yes or no"
 
 
+def test_v10_classification_rejects_a_label_count_mismatch() -> None:
+    candidate = v10_module._CandidateRow(
+        1,
+        {},
+        ("first", "second"),
+        ({}, {}),
+    )
+    pending = [v10_module._PendingRow(candidate, None)]
+
+    class WrongCountClassifier:
+        def classify(self, sentences: Sequence[str]) -> tuple[str, ...]:
+            return ("yes",)
+
+    with pytest.raises(ValueError) as error:
+        v10_module._classify_sentences(pending, WrongCountClassifier())
+    assert str(error.value) == (
+        "Classifier returned a label count different from its input"
+    )
+
+
+def test_v10_output_rejects_a_pending_row_without_classification() -> None:
+    candidate = v10_module._CandidateRow(1, {}, ("sentence",), ({},))
+    pending = [v10_module._PendingRow(candidate, None)]
+
+    with pytest.raises(RuntimeError) as error:
+        v10_module._write_pending_rows(
+            pending, output=StringIO(), stats=v10_module._OutputStats()
+        )
+    assert str(error.value) == "V10 pending row has no classification"
+
+
 def test_v10_reusable_summary_rejects_bad_counts_and_result_hash(
     tmp_path: Path,
 ) -> None:
@@ -703,6 +777,40 @@ def test_v10_reusable_summary_rejects_bad_counts_and_result_hash(
         )
         is None
     )
+
+
+def test_v10_reusable_summary_preserves_the_kept_row_count(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    _write_v9_input(config.input_path)
+    with config.input_path.open("a", encoding="utf-8") as output:
+        output.write(
+            json.dumps(
+                {
+                    "sentences_with_topic_term": ["third sentence."],
+                    "relevant_sentence_metadata": [{"topic_terms": ["topic"]}],
+                }
+            )
+            + "\n"
+        )
+    run_v10(config, classifier=_FakeClassifier(["yes", "no", "no", "no"]))
+
+    summary = v10_module._load_reusable_summary(
+        config=config,
+        input_path=config.input_path,
+        output_path=config.output_path,
+        manifest_path=config.manifest_path,
+        checkpoint_path=config.effective_checkpoint_path,
+        source_sha256=v10_module._sha256_file(config.input_path),
+        model_record=v10_module._model_record(config.model_path),
+        runtime_model_record=v10_module._model_record(config.model_path),
+    )
+
+    assert summary is not None
+    assert summary.rows_processed == 3
+    assert summary.rows_kept == 1
+    assert summary.rows_filtered == 2
 
 
 def test_v10_manifest_helpers_reject_malformed_records(tmp_path: Path) -> None:
@@ -774,8 +882,9 @@ def test_v10_chat_rendering_supports_fallback_and_string_mlx_templates() -> None
     ],
 )
 def test_v10_mlx_rendering_rejects_non_integer_tokens(tokenizer) -> None:
-    with pytest.raises(TypeError, match="token IDs"):
+    with pytest.raises(TypeError) as error:
         render_mlx_prompt(tokenizer(), "prompt")
+    assert str(error.value) == "MLX chat template did not return token IDs"
 
 
 @pytest.mark.parametrize("raw_output", ["YES", "<think>reason</think>maybe"])
@@ -815,7 +924,10 @@ class _FakeTorch:
 
 
 class _FakeEncoded(dict):
+    devices: ClassVar[list[object]] = []
+
     def to(self, device):
+        self.devices.append(device)
         self["device"] = device
         return self
 
@@ -894,6 +1006,7 @@ def test_v10_native_classifier_uses_chat_template_and_greedy_generation(
     _FakeNativeTokenizer.chat_calls = []
     _FakeNativeTokenizer.encode_calls = []
     _FakeNativeTokenizer.decode_calls = []
+    _FakeEncoded.devices = []
     _FakeNativeModel.pretrained_args = []
     _FakeTorch.backends.mps.available = True
     classifier = LfmSentenceClassifier(model_path, max_new_tokens=1)
@@ -932,8 +1045,11 @@ def test_v10_native_classifier_uses_chat_template_and_greedy_generation(
         )
     ]
     assert classifier._model.device == "mps"
+    assert _FakeEncoded.devices == ["mps"]
     assert classifier._model.generate_kwargs["max_new_tokens"] == 1
     assert classifier._model.generate_kwargs["do_sample"] is False
+    assert classifier._model.generate_kwargs["input_ids"] is not None
+    assert classifier._model.generate_kwargs["device"] == "mps"
 
 
 def test_v10_native_classifier_rejects_wrong_label_count(
@@ -1048,6 +1164,21 @@ def test_v10_model_wrappers_validate_model_path_and_token_limit(
     with pytest.raises(ValueError) as error:
         factory(model_path, max_new_tokens=0)
     assert str(error.value) == message
+
+
+def test_v10_mlx_classifier_accepts_one_new_token(tmp_path: Path, monkeypatch) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+
+    monkeypatch.setattr(
+        inference_module,
+        "_load_mlx",
+        lambda: (lambda path: ("model", object()), lambda *args, **kwargs: None),
+    )
+
+    classifier = MlxSentenceClassifier(model_path, max_new_tokens=1)
+
+    assert classifier._max_new_tokens == 1
 
 
 def test_v10_lazy_runtime_loaders_report_missing_optional_dependencies(
