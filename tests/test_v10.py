@@ -485,13 +485,18 @@ def test_v10_model_record_hashes_sorted_non_ascii_file_records_exactly(
     early_path.write_text("alpha", encoding="utf-8")
 
     record = v10_module._model_record(model_path)
+    late_record_path = next(
+        path
+        for path in v10_module._model_files(model_path.resolve())
+        if path.name != "a.json"
+    )
     expected_files = [
         {
             "path": "a.json",
             "sha256": v10_module._sha256_file(early_path),
         },
         {
-            "path": str(late_path.resolve().relative_to(model_path.resolve())),
+            "path": str(late_record_path.relative_to(model_path.resolve())),
             "sha256": v10_module._sha256_file(late_path),
         },
     ]
