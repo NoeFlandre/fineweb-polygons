@@ -203,6 +203,20 @@ interrupted run resume without reclassifying completed rows. The manifest
 stores the exact prompt, prompt hash, model fingerprints, runtime fingerprint,
 settings, counts, and output hash.
 
+## Golden pipeline contract
+
+`tests/test_pipeline_contract.py` runs a tiny deterministic V6 fixture through
+V7, V8, V9, and V10. It checks the final row, stage counts, result hashes,
+manifest completion, sentence proximity, yes/no classification, and reuse of
+completed stages without recomputation. The scan and V6 resumability contract
+is covered separately in `tests/test_runs.py`.
+
+Run only this contract with:
+
+```bash
+uv run pytest -q tests/test_pipeline_contract.py
+```
+
 ## Red-green-refactor
 
 New behavior follows TDD:
