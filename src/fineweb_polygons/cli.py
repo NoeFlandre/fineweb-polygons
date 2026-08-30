@@ -117,11 +117,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_scan(parsed: argparse.Namespace, runner: Runner) -> int:
-    data_root = parsed.data_root.expanduser().resolve()
-    paths = ProjectPaths.from_environment(
-        Path.cwd(),
-        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
-    )
+    paths = _project_paths(parsed.data_root)
     pbf_path = parsed.pbf or paths.raw_dir / "monaco-latest.osm.pbf"
     config = ScanRunConfig(
         paths=paths,
@@ -137,91 +133,57 @@ def _run_scan(parsed: argparse.Namespace, runner: Runner) -> int:
     except (FileNotFoundError, OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    print(json.dumps(_summary_record(summary), ensure_ascii=False, sort_keys=True))
+    _print_summary(summary, _summary_record)
     return 0
 
 
 def _run_segment_v7(parsed: argparse.Namespace, runner: V7Runner) -> int:
-    data_root = parsed.data_root.expanduser().resolve()
-    paths = ProjectPaths.from_environment(
-        Path.cwd(),
-        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
-    )
-    try:
-        validate_external_data_root(paths)
-        config = V7RunConfig(
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: V7RunConfig(
             input_path=validate_data_path(paths, parsed.input),
             output_path=validate_data_path(paths, parsed.output),
             manifest_path=validate_data_path(paths, parsed.manifest),
             model_id=parsed.model_id,
             batch_size=parsed.batch_size,
-        )
-        summary = runner(config)
-    except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-    print(json.dumps(_v7_summary_record(summary), ensure_ascii=False, sort_keys=True))
-    return 0
+        ),
+        runner=runner,
+        summary_record=_v7_summary_record,
+    )
 
 
 def _run_filter_v8(parsed: argparse.Namespace, runner: V8Runner) -> int:
-    data_root = parsed.data_root.expanduser().resolve()
-    paths = ProjectPaths.from_environment(
-        Path.cwd(),
-        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
-    )
-    try:
-        validate_external_data_root(paths)
-        config = V8RunConfig(
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: V8RunConfig(
             input_path=validate_data_path(paths, parsed.input),
             output_path=validate_data_path(paths, parsed.output),
             manifest_path=validate_data_path(paths, parsed.manifest),
             vocabulary_path=validate_data_path(paths, parsed.vocabulary),
-        )
-        summary = runner(config)
-    except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-    print(json.dumps(_v8_summary_record(summary), ensure_ascii=False, sort_keys=True))
-    return 0
+        ),
+        runner=runner,
+        summary_record=_v8_summary_record,
+    )
 
 
 def _run_filter_v9(parsed: argparse.Namespace, runner: V9Runner) -> int:
-    data_root = parsed.data_root.expanduser().resolve()
-    paths = ProjectPaths.from_environment(
-        Path.cwd(),
-        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
-    )
-    try:
-        validate_external_data_root(paths)
-        config = V9RunConfig(
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: V9RunConfig(
             input_path=validate_data_path(paths, parsed.input),
             output_path=validate_data_path(paths, parsed.output),
             manifest_path=validate_data_path(paths, parsed.manifest),
             vocabulary_path=validate_data_path(paths, parsed.vocabulary),
-        )
-        summary = runner(config)
-    except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-    print(json.dumps(_v9_summary_record(summary), ensure_ascii=False, sort_keys=True))
-    return 0
+        ),
+        runner=runner,
+        summary_record=_v9_summary_record,
+    )
 
 
 def _run_filter_v10(parsed: argparse.Namespace, runner: V10Runner) -> int:
-    data_root = parsed.data_root.expanduser().resolve()
-    paths = ProjectPaths.from_environment(
-        Path.cwd(),
-        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(data_root)},
-    )
-    try:
-        validate_external_data_root(paths)
-        checkpoint = (
-            validate_data_path(paths, parsed.checkpoint)
-            if parsed.checkpoint is not None
-            else None
-        )
-        config = V10RunConfig(
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: V10RunConfig(
             input_path=validate_data_path(paths, parsed.input),
             output_path=validate_data_path(paths, parsed.output),
             manifest_path=validate_data_path(paths, parsed.manifest),
@@ -231,16 +193,50 @@ def _run_filter_v10(parsed: argparse.Namespace, runner: V10Runner) -> int:
                 if parsed.runtime_model_path is not None
                 else None
             ),
-            checkpoint_path=checkpoint,
+            checkpoint_path=(
+                validate_data_path(paths, parsed.checkpoint)
+                if parsed.checkpoint is not None
+                else None
+            ),
             batch_size=parsed.batch_size,
             max_new_tokens=parsed.max_new_tokens,
-        )
-        summary = runner(config)
+        ),
+        runner=runner,
+        summary_record=_v10_summary_record,
+    )
+
+
+def _project_paths(data_root: Path) -> ProjectPaths:
+    resolved_root = data_root.expanduser().resolve()
+    return ProjectPaths.from_environment(
+        Path.cwd(),
+        environ={DATA_ROOT_ENVIRONMENT_VARIABLE: str(resolved_root)},
+    )
+
+
+def _run_external_stage[ConfigT, SummaryT](
+    data_root: Path,
+    *,
+    config_factory: Callable[[ProjectPaths], ConfigT],
+    runner: Callable[[ConfigT], SummaryT],
+    summary_record: Callable[[SummaryT], dict[str, object]],
+) -> int:
+    paths = _project_paths(data_root)
+    try:
+        validate_external_data_root(paths)
+        summary = runner(config_factory(paths))
     except (FileNotFoundError, OSError, RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    print(json.dumps(_v10_summary_record(summary), ensure_ascii=False, sort_keys=True))
+    _print_summary(summary, summary_record)
     return 0
+
+
+def _print_summary[SummaryT](
+    summary: SummaryT,
+    summary_record: Callable[[SummaryT], dict[str, object]],
+) -> None:
+    print(json.dumps(summary_record(summary), ensure_ascii=False, sort_keys=True))
 
 
 def _summary_record(summary: RunSummary) -> dict[str, object]:

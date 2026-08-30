@@ -123,3 +123,14 @@ class _ProfileRunData:
     name_occurrences: Mapping[str, int]
     frequency_result: SpecificityResult | None = None
     frequency_artifact_sha256: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ProfileSelection:
+    """Profiles and source counts selected for one retrieval version."""
+
+    profiles: tuple[PolygonProfile, ...]
+    named_count: int
+    unnamed_count: int
+    filtered_count: int
+    name_occurrences: Mapping[str, int]

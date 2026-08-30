@@ -200,6 +200,33 @@ def test_cli_reports_unknown_commands_with_the_command_name(monkeypatch) -> None
         cli_module.main(["unexpected"])
 
 
+def test_cli_external_stage_composes_paths_runner_and_summary(
+    tmp_path: Path, capsys
+) -> None:
+    captured: dict[str, object] = {}
+
+    def make_config(paths):
+        captured["data_root"] = paths.data_root
+        return "config"
+
+    def run(config):
+        captured["config"] = config
+        return "summary"
+
+    assert (
+        cli_module._run_external_stage(
+            tmp_path,
+            config_factory=make_config,
+            runner=run,
+            summary_record=lambda summary: {"value": summary},
+        )
+        == 0
+    )
+
+    assert captured == {"data_root": tmp_path, "config": "config"}
+    assert json.loads(capsys.readouterr().out) == {"value": "summary"}
+
+
 def test_cli_requires_a_subcommand_and_a_shard() -> None:
     parser = _build_parser()
 

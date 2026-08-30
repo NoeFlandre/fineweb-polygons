@@ -13,6 +13,7 @@ htmlcov/
 mutants/
 mutants
 mutmut-data/
+.mutmut-cache
 site/
 .cache/
 .env

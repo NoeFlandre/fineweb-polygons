@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -34,6 +34,7 @@ from fineweb_polygons.matching import EvidenceMatcher
 from fineweb_polygons.models import PolygonProfile
 from fineweb_polygons.normalization import NORMALIZATION_VERSION
 from fineweb_polygons.polygons import (
+    PolygonReadResult,
     read_named_polygon_profiles,
     read_v2_polygon_profiles,
     read_v3_polygon_profiles,
@@ -44,6 +45,7 @@ from fineweb_polygons.run_models import (
     ScanRunConfig,
     _Partition,
     _ProfileRunData,
+    _ProfileSelection,
     _RowGroup,
     _RunCounters,
     _RunLayout,
@@ -160,32 +162,21 @@ def _prepare_profile_data(
     source_shard_sha256: str,
 ) -> _ProfileRunData:
     include_occurrences = definition.requires_name_specificity
-    if include_occurrences:
-        selection = _select_profiles(
-            pbf_path,
-            profiles,
-            retrieval_version=config.retrieval_version,
-            include_name_occurrences=True,
-        )
-    else:
-        selection = _select_profiles(
-            pbf_path,
-            profiles,
-            retrieval_version=config.retrieval_version,
-        )
-    # pragma: no mutate start
-    selected_profiles = cast(tuple[PolygonProfile, ...], selection[0])
-    # pragma: no mutate end
-    name_occurrences = _selection_occurrences(selection)
-    # pragma: no mutate start
+    selection = _select_profiles(
+        pbf_path,
+        profiles,
+        retrieval_version=config.retrieval_version,
+        include_name_occurrences=include_occurrences,
+    )
+    selected_profiles = selection.profiles
+    name_occurrences = dict(selection.name_occurrences)
     base_data = _ProfileRunData(
         profiles=selected_profiles,
-        named_count=cast(int, selection[1]),  # pragma: no mutate
-        unnamed_count=cast(int, selection[2]),  # pragma: no mutate
-        filtered_count=cast(int, selection[3]),  # pragma: no mutate
+        named_count=selection.named_count,
+        unnamed_count=selection.unnamed_count,
+        filtered_count=selection.filtered_count,
         name_occurrences=name_occurrences,
     )
-    # pragma: no mutate end
     if not include_occurrences:
         return base_data
     if not name_occurrences:
@@ -208,17 +199,6 @@ def _prepare_profile_data(
         frequency_result=result,
         frequency_artifact_sha256=artifact_sha256,
     )
-
-
-def _selection_occurrences(
-    selection: tuple[object, ...],
-) -> dict[str, int]:  # pragma: no mutate block
-    if len(selection) < 5:
-        return {}
-    raw = cast(  # pragma: no mutate
-        tuple[tuple[str, int], ...], selection[4]
-    )
-    return dict(raw)
 
 
 def _run_configuration(
@@ -300,9 +280,9 @@ def _select_profiles(
     *,
     retrieval_version: str,
     include_name_occurrences: bool = False,
-) -> tuple[object, ...]:
+) -> _ProfileSelection:
     if profiles is None:
-        readers = {
+        readers: dict[str, Callable[[Path], PolygonReadResult]] = {
             "v1": read_named_polygon_profiles,
             "v2": read_v2_polygon_profiles,
             "v3": read_v3_polygon_profiles,
@@ -312,20 +292,27 @@ def _select_profiles(
         }
         reader = readers[retrieval_version]
         result = reader(pbf_path)
-        selection: tuple[object, ...] = (
-            result.profiles,
-            result.named_count,
-            result.unnamed_count,
-            result.filtered_count,
+        return _ProfileSelection(
+            profiles=result.profiles,
+            named_count=result.named_count,
+            unnamed_count=result.unnamed_count,
+            filtered_count=result.filtered_count,
+            name_occurrences=(
+                dict(result.name_occurrences) if include_name_occurrences else {}
+            ),
         )
-        if include_name_occurrences:
-            selection += (result.name_occurrences,)
-        return selection
     selected = tuple(profiles)
-    selection = (selected, len(selected), 0, 0)
-    if include_name_occurrences:
-        selection += (tuple((profile.normalized_name, 1) for profile in selected),)
-    return selection
+    return _ProfileSelection(
+        profiles=selected,
+        named_count=len(selected),
+        unnamed_count=0,
+        filtered_count=0,
+        name_occurrences=(
+            {profile.normalized_name: 1 for profile in selected}
+            if include_name_occurrences
+            else {}
+        ),
+    )
 
 
 def _load_or_build_frequency_artifact(

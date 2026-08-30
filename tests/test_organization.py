@@ -15,6 +15,7 @@ from fineweb_polygons.run_models import (
     ScanRunConfig,
     _Partition,
     _ProfileRunData,
+    _ProfileSelection,
     _RowGroup,
     _RunCounters,
     _RunLayout,
@@ -27,6 +28,7 @@ def test_runs_facade_reexports_its_value_objects() -> None:
     assert runs.ScanRunConfig is ScanRunConfig
     assert runs.RunSummary is RunSummary
     assert runs._Partition is _Partition
+    assert runs._ProfileSelection is _ProfileSelection
     assert runs._ProfileRunData is _ProfileRunData
     assert runs._RowGroup is _RowGroup
     assert runs._RunCounters is _RunCounters

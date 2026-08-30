@@ -638,16 +638,29 @@ def test_v5_helper_boundaries_and_record_conversions(
     layout = _RunLayout.from_config(config)
     profile = PolygonProfile.create("way/1", "Rare Place")
 
-    assert runs_module._selection_occurrences(
-        (profile, 1, 2, 3, (("rare place", 4),))
-    ) == {"rare place": 4}
-    assert runs_module._selection_occurrences((profile, 1, 2, 3)) == {}
+    assert runs_module._ProfileSelection(
+        profiles=(profile,),
+        named_count=1,
+        unnamed_count=2,
+        filtered_count=3,
+        name_occurrences={"rare place": 4},
+    ).name_occurrences == {"rare place": 4}
+    assert (
+        runs_module._ProfileSelection(
+            profiles=(profile,),
+            named_count=1,
+            unnamed_count=2,
+            filtered_count=3,
+            name_occurrences={},
+        ).name_occurrences
+        == {}
+    )
     assert runs_module._select_profiles(
         shard,
         (profile,),
         retrieval_version="v5",
         include_name_occurrences=True,
-    )[4] == (("rare place", 1),)
+    ).name_occurrences == {"rare place": 1}
     assert runs_module._frequency_records((profile,), {}, {}) == (
         NameFrequency("rare place", 1, 0),
     )
@@ -766,6 +779,23 @@ def test_v5_helper_boundaries_and_record_conversions(
         runs_module._validate_frequency_threshold(0, 1001)
 
 
+def test_profile_selection_exposes_named_fields(tmp_path: Path) -> None:
+    profile = PolygonProfile.create("way/1", "Rare Place")
+
+    selection = _select_profiles(
+        tmp_path / "unused.osm.pbf",
+        (profile,),
+        retrieval_version="v5",
+        include_name_occurrences=True,
+    )
+
+    assert selection.profiles == (profile,)
+    assert selection.named_count == 1
+    assert selection.unnamed_count == 0
+    assert selection.filtered_count == 0
+    assert selection.name_occurrences == {"rare place": 1}
+
+
 def test_prepare_profile_data_passes_v5_selection_and_frequency_inputs(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -782,7 +812,13 @@ def test_prepare_profile_data_passes_v5_selection_and_frequency_inputs(
     profile = PolygonProfile.create("way/1", "Vaduz")
     definition = get_retrieval_definition("v5")
     selected = (profile,)
-    selection = (selected, 9, 8, 7, (("vaduz", 4),))
+    selection = runs_module._ProfileSelection(
+        profiles=selected,
+        named_count=9,
+        unnamed_count=8,
+        filtered_count=7,
+        name_occurrences={"vaduz": 4},
+    )
     captured: dict[str, object] = {}
     frequency_result = SpecificityResult(
         profiles=selected,
@@ -845,7 +881,13 @@ def test_prepare_profile_data_passes_v5_selection_and_frequency_inputs(
         frequency_artifact_sha256="artifact-sha",
     )
 
-    empty_selection = (selected, 9, 8, 7)
+    empty_selection = runs_module._ProfileSelection(
+        profiles=selected,
+        named_count=9,
+        unnamed_count=8,
+        filtered_count=7,
+        name_occurrences={},
+    )
 
     def fake_empty_select(*args, **kwargs):
         del args, kwargs
@@ -885,12 +927,12 @@ def test_select_profiles_includes_reader_name_occurrences(
         include_name_occurrences=True,
     )
 
-    assert result == (
-        expected.profiles,
-        expected.named_count,
-        expected.unnamed_count,
-        expected.filtered_count,
-        expected.name_occurrences,
+    assert result == runs_module._ProfileSelection(
+        profiles=expected.profiles,
+        named_count=expected.named_count,
+        unnamed_count=expected.unnamed_count,
+        filtered_count=expected.filtered_count,
+        name_occurrences=dict(expected.name_occurrences),
     )
 
 
@@ -939,11 +981,20 @@ def test_execute_run_passes_raw_profile_inputs_and_v2_context_requirement(
     captured: dict[str, object] = {}
     selected = (PolygonProfile.create("way/1", "Fontvieille"),)
 
-    def fake_select(pbf_path, profiles, *, retrieval_version):
+    def fake_select(
+        pbf_path, profiles, *, retrieval_version, include_name_occurrences=False
+    ):
+        del include_name_occurrences
         captured["pbf_path"] = pbf_path
         captured["profiles"] = profiles
         captured["retrieval_version"] = retrieval_version
-        return selected, 1, 0, 0
+        return runs_module._ProfileSelection(
+            profiles=selected,
+            named_count=1,
+            unnamed_count=0,
+            filtered_count=0,
+            name_occurrences={},
+        )
 
     real_matcher = runs_module.EvidenceMatcher
 
@@ -980,11 +1031,20 @@ def test_execute_run_passes_v4_text_name_requirement(
     captured: dict[str, object] = {}
     selected = (PolygonProfile.create("way/1", "Fontvieille"),)
 
-    def fake_select(pbf_path, profiles, *, retrieval_version):
+    def fake_select(
+        pbf_path, profiles, *, retrieval_version, include_name_occurrences=False
+    ):
+        del include_name_occurrences
         captured["pbf_path"] = pbf_path
         captured["profiles"] = profiles
         captured["retrieval_version"] = retrieval_version
-        return selected, 1, 0, 0
+        return runs_module._ProfileSelection(
+            profiles=selected,
+            named_count=1,
+            unnamed_count=0,
+            filtered_count=0,
+            name_occurrences={},
+        )
 
     real_matcher = runs_module.EvidenceMatcher
 
@@ -1009,6 +1069,48 @@ def test_execute_run_passes_v4_text_name_requirement(
     }
 
 
+def test_prepare_profile_data_preserves_non_specific_selection_data(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config, shard = make_config(tmp_path)
+    config = ScanRunConfig(
+        paths=config.paths,
+        pbf_path=config.pbf_path,
+        shard_path=config.shard_path,
+        run_id="v4-profile-data",
+        retrieval_version="v4",
+    )
+    profile = PolygonProfile.create("way/1", "Fontvieille")
+    selection = runs_module._ProfileSelection(
+        profiles=(profile,),
+        named_count=3,
+        unnamed_count=2,
+        filtered_count=1,
+        name_occurrences={"fontvieille": 3},
+    )
+    monkeypatch.setattr(
+        runs_module, "_select_profiles", lambda *args, **kwargs: selection
+    )
+
+    data = runs_module._prepare_profile_data(
+        config=config,
+        definition=get_retrieval_definition("v4"),
+        layout=_RunLayout.from_config(config),
+        pbf_path=config.pbf_path,
+        shard_path=shard,
+        profiles=None,
+        source_shard_sha256="shard-sha",
+    )
+
+    assert data == runs_module._ProfileRunData(
+        profiles=(profile,),
+        named_count=3,
+        unnamed_count=2,
+        filtered_count=1,
+        name_occurrences={"fontvieille": 3},
+    )
+
+
 def test_select_profiles_dispatches_v3_reader(tmp_path: Path, monkeypatch) -> None:
     pbf = tmp_path / "monaco.osm.pbf"
     expected = PolygonReadResult(
@@ -1021,11 +1123,12 @@ def test_select_profiles_dispatches_v3_reader(tmp_path: Path, monkeypatch) -> No
 
     result = _select_profiles(pbf, None, retrieval_version="v3")
 
-    assert result == (
-        expected.profiles,
-        expected.named_count,
-        expected.unnamed_count,
-        expected.filtered_count,
+    assert result == runs_module._ProfileSelection(
+        profiles=expected.profiles,
+        named_count=expected.named_count,
+        unnamed_count=expected.unnamed_count,
+        filtered_count=expected.filtered_count,
+        name_occurrences={},
     )
 
 
@@ -1041,11 +1144,12 @@ def test_select_profiles_dispatches_v4_reader(tmp_path: Path, monkeypatch) -> No
 
     result = _select_profiles(pbf, None, retrieval_version="v4")
 
-    assert result == (
-        expected.profiles,
-        expected.named_count,
-        expected.unnamed_count,
-        expected.filtered_count,
+    assert result == runs_module._ProfileSelection(
+        profiles=expected.profiles,
+        named_count=expected.named_count,
+        unnamed_count=expected.unnamed_count,
+        filtered_count=expected.filtered_count,
+        name_occurrences={},
     )
 
 
@@ -1097,36 +1201,16 @@ def test_select_profiles_uses_the_requested_raw_pbf_reader(
     monkeypatch.setattr(runs_module, "read_v3_polygon_profiles", v3_reader)
     pbf = tmp_path / "monaco.osm.pbf"
 
-    assert _select_profiles(pbf, None, retrieval_version="v1") == (
-        expected.profiles,
-        4,
-        5,
-        6,
-    )
-    assert _select_profiles(pbf, None, retrieval_version="v2") == (
-        expected.profiles,
-        4,
-        5,
-        6,
-    )
-    assert _select_profiles(pbf, None, retrieval_version="v3") == (
-        expected.profiles,
-        4,
-        5,
-        6,
-    )
-    assert _select_profiles(pbf, None, retrieval_version="v5") == (
-        expected.profiles,
-        4,
-        5,
-        6,
-    )
-    assert _select_profiles(pbf, None, retrieval_version="v6") == (
-        expected.profiles,
-        4,
-        5,
-        6,
-    )
+    for retrieval_version in ("v1", "v2", "v3", "v5", "v6"):
+        assert _select_profiles(
+            pbf, None, retrieval_version=retrieval_version
+        ) == runs_module._ProfileSelection(
+            profiles=expected.profiles,
+            named_count=4,
+            unnamed_count=5,
+            filtered_count=6,
+            name_occurrences={},
+        )
     assert calls == [
         ("v1", pbf),
         ("v2", pbf),
@@ -1143,7 +1227,13 @@ def test_select_profiles_with_explicit_profiles_has_zero_source_counts(
 
     assert _select_profiles(
         tmp_path / "unused.osm.pbf", profiles, retrieval_version="v2"
-    ) == (profiles, 1, 0, 0)
+    ) == runs_module._ProfileSelection(
+        profiles=profiles,
+        named_count=1,
+        unnamed_count=0,
+        filtered_count=0,
+        name_occurrences={},
+    )
 
 
 def test_new_manifest_contains_pending_partitions_and_all_fingerprints(
