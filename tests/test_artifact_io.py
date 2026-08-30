@@ -129,6 +129,44 @@ def test_read_json_object_returns_only_valid_json_objects(tmp_path: Path) -> Non
     assert artifact_io.read_json_object(valid) == {"status": "complete"}
 
 
+def test_decode_json_object_line_reports_versioned_errors() -> None:
+    with pytest.raises(ValueError) as empty_error:
+        artifact_io.decode_json_object_line("\n", 7, version="V7")
+    assert str(empty_error.value) == "V7 JSONL line 7 is empty"
+
+    with pytest.raises(ValueError) as object_error:
+        artifact_io.decode_json_object_line("[]", 8, version="V7")
+    assert str(object_error.value) == "V7 JSONL line 8 must be an object"
+
+
+def test_iter_json_objects_yields_line_numbers_and_objects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "rows.jsonl"
+    path.write_text('{"a": 1}\n{"b": "é"}\n', encoding="utf-8")
+    real_open: Any = Path.open
+    encodings: list[object] = []
+
+    def recording_open(self: Path, *args: object, **kwargs: object):
+        if self == path:
+            encodings.append(kwargs.get("encoding"))
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", recording_open)
+
+    assert list(artifact_io.iter_json_objects(path, version="V7")) == [
+        (1, {"a": 1}),
+        (2, {"b": "é"}),
+    ]
+    assert encodings == ["utf-8"]
+
+    invalid = tmp_path / "invalid-rows.jsonl"
+    invalid.write_text("{}\n[]\n", encoding="utf-8")
+    with pytest.raises(ValueError) as error:
+        list(artifact_io.iter_json_objects(invalid, version="V7"))
+    assert str(error.value) == "V7 JSONL line 2 must be an object"
+
+
 def test_write_json_line_is_sorted_and_unicode_safe() -> None:
     output = StringIO()
 

@@ -637,6 +637,60 @@ def test_v9_decode_input_line_preserves_line_numbers_in_all_errors() -> None:
     )
 
 
+def test_v9_candidate_decoder_preserves_fields_and_error_contracts() -> None:
+    row = {"text": "A sentence.", "sentences": ["A sentence."]}
+
+    assert v9_module._decode_candidate_row(row, 3) == (row, ("A sentence.",))
+
+    with pytest.raises(ValueError) as text_error:
+        v9_module._decode_candidate_row({"text": 1, "sentences": []}, 4)
+    assert str(text_error.value) == ("V8 JSONL line 4 must contain a string text field")
+
+    with pytest.raises(ValueError) as sentences_error:
+        v9_module._decode_candidate_row({"text": "A sentence.", "sentences": None}, 5)
+    assert str(sentences_error.value) == (
+        "V8 JSONL line 5 must contain a list of string sentences"
+    )
+
+
+def test_v9_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+    path = tmp_path / "rows.jsonl"
+    path.write_text(
+        '{"text": "A.", "sentences": ["A."]}\n{"text": 1, "sentences": []}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as error:
+        list(v9_module._read_rows(path))
+    assert str(error.value) == "V8 JSONL line 2 must contain a string text field"
+
+
+def test_v9_legacy_object_decoder_and_text_opener_remain_compatible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    row = {"text": "Héllo"}
+    assert v9_module._decode_object(json.dumps(row), 3) == row
+
+    with pytest.raises(ValueError) as error:
+        v9_module._decode_object("[]", 4)
+    assert str(error.value) == "V8 JSONL line 4 must be an object"
+
+    path = tmp_path / "input.jsonl"
+    path.write_text("Héllo\n", encoding="utf-8")
+    real_open: Any = Path.open
+    encodings: list[object] = []
+
+    def recording_open(self: Path, *args: object, **kwargs: object):
+        if self == path:
+            encodings.append(kwargs.get("encoding"))
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", recording_open)
+    with v9_module._open_text_input(path) as source:
+        assert source.read() == "Héllo\n"
+    assert encodings == ["utf-8"]
+
+
 def test_v9_writes_kept_rows_with_sorted_json_keys() -> None:
     output = StringIO()
 

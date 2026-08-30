@@ -271,6 +271,20 @@ def test_run_v7_rejects_invalid_jsonl_rows(
     assert not config.manifest_path.exists()
 
 
+def test_v7_compatibility_decoder_preserves_text_and_error_contracts() -> None:
+    row = {"text": "Héllo"}
+
+    assert v7_module._decode_input_line(json.dumps(row), 3) == (row, "Héllo")
+
+    with pytest.raises(ValueError) as text_error:
+        v7_module._decode_input_line('{"text": 3}', 4)
+    assert str(text_error.value) == ("V6 JSONL line 4 must contain a string text field")
+
+    with pytest.raises(ValueError) as object_error:
+        v7_module._decode_input_line("[]", 5)
+    assert str(object_error.value) == "V6 JSONL line 5 must be an object"
+
+
 def test_run_v7_rejects_a_sentence_batch_count_mismatch(tmp_path: Path) -> None:
     config = _config(tmp_path)
     _write_v6_input(config.input_path)

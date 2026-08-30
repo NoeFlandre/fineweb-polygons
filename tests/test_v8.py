@@ -232,6 +232,25 @@ def test_decode_v7_line_rejects_empty_and_non_object_rows() -> None:
     assert str(text_error.value) == ("V7 JSONL line 6 must contain a string text field")
 
 
+def test_v8_text_row_decoder_preserves_text_and_error_contracts() -> None:
+    row = {"text": "Héllo"}
+
+    assert v8_module._decode_text_row(row, 3) == (row, "Héllo")
+
+    with pytest.raises(ValueError) as error:
+        v8_module._decode_text_row({"text": 3}, 4)
+    assert str(error.value) == ("V7 JSONL line 4 must contain a string text field")
+
+
+def test_v8_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+    path = tmp_path / "rows.jsonl"
+    path.write_text('{"text": "ok"}\n{"text": 3}\n', encoding="utf-8")
+
+    with pytest.raises(ValueError) as error:
+        list(v8_module._read_rows(path))
+    assert str(error.value) == "V7 JSONL line 2 must contain a string text field"
+
+
 def test_category_counts_include_each_matching_category_once(tmp_path: Path) -> None:
     config = _config(tmp_path)
     rows = _write_v7_input(config.input_path)

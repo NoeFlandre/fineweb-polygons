@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import json  # noqa: F401 - preserve the historical module-level patch point
 from collections import Counter
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -14,6 +14,12 @@ from fineweb_polygons.artifact_io import (
 )
 from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
+)
+from fineweb_polygons.artifact_io import (
+    decode_json_object_line as _decode_json_object_line,
+)
+from fineweb_polygons.artifact_io import (
+    iter_json_objects as _iter_json_objects,
 )
 from fineweb_polygons.artifact_io import (
     read_json_object as _read_manifest,
@@ -177,17 +183,18 @@ def _add_category_documents(counts: Counter[str], categories: tuple[str, ...]) -
 
 
 def _read_rows(input_path: Path) -> Iterator[tuple[dict[str, Any], str]]:
-    with input_path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, start=1):
-            yield _decode_input_line(line, line_number)
+    for line_number, decoded in _iter_json_objects(input_path, version="V7"):
+        yield _decode_text_row(decoded, line_number)
 
 
 def _decode_input_line(line: str, line_number: int) -> tuple[dict[str, Any], str]:
-    if not line.strip():
-        raise ValueError(f"V7 JSONL line {line_number} is empty")
-    decoded = json.loads(line)
-    if not isinstance(decoded, dict):
-        raise ValueError(f"V7 JSONL line {line_number} must be an object")
+    decoded = _decode_json_object_line(line, line_number, version="V7")
+    return _decode_text_row(decoded, line_number)
+
+
+def _decode_text_row(
+    decoded: dict[str, Any], line_number: int
+) -> tuple[dict[str, Any], str]:
     text = decoded.get("text")
     if not isinstance(text, str):
         raise ValueError(

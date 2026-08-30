@@ -698,6 +698,63 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
     assert str(error.value) == "Classifier labels must be exactly yes or no"
 
 
+def test_v10_candidate_decoder_preserves_fields_and_error_contracts() -> None:
+    row = {
+        "sentences_with_topic_term": ["A sentence."],
+        "relevant_sentence_metadata": [{"topic_terms": ["term"]}],
+    }
+
+    candidate = v10_module._decode_candidate_row(row, 3)
+    assert candidate == v10_module._CandidateRow(
+        line_number=3,
+        row=row,
+        sentences=("A sentence.",),
+        metadata=({"topic_terms": ["term"]},),
+    )
+
+    with pytest.raises(ValueError) as sentence_error:
+        v10_module._decode_candidate_row(
+            {"sentences_with_topic_term": "A sentence."}, 4
+        )
+    assert str(sentence_error.value) == (
+        "V9 JSONL line 4 must contain a list of candidate sentences"
+    )
+
+    with pytest.raises(ValueError) as metadata_error:
+        v10_module._decode_candidate_row(
+            {
+                "sentences_with_topic_term": ["A sentence."],
+                "relevant_sentence_metadata": [],
+            },
+            5,
+        )
+    assert str(metadata_error.value) == (
+        "V9 JSONL line 5 metadata must align with candidate sentences"
+    )
+
+
+def test_v10_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+    path = tmp_path / "rows.jsonl"
+    path.write_text(
+        '{"sentences_with_topic_term": [], "relevant_sentence_metadata": []}\n[]\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as error:
+        list(v10_module._read_rows(path))
+    assert str(error.value) == "V9 JSONL line 2 must be an object"
+
+
+def test_v10_legacy_object_decoder_remains_compatible() -> None:
+    row = {"sentences_with_topic_term": [], "relevant_sentence_metadata": []}
+
+    assert v10_module._decode_object(json.dumps(row), 3) == row
+
+    with pytest.raises(ValueError) as error:
+        v10_module._decode_object("[]", 4)
+    assert str(error.value) == "V9 JSONL line 4 must be an object"
+
+
 def test_v10_classification_rejects_a_label_count_mismatch() -> None:
     candidate = v10_module._CandidateRow(
         1,

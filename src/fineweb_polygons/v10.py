@@ -18,6 +18,12 @@ from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
 )
 from fineweb_polygons.artifact_io import (
+    decode_json_object_line as _decode_json_object_line,
+)
+from fineweb_polygons.artifact_io import (
+    iter_json_objects as _iter_json_objects,
+)
+from fineweb_polygons.artifact_io import (
     read_json_object as _read_manifest,
 )
 from fineweb_polygons.artifact_io import (
@@ -576,15 +582,21 @@ def _metadata_values(
 
 
 def _read_rows(input_path: Path) -> Iterator[_CandidateRow]:
-    with input_path.open(encoding="utf-8") as source:
-        for line_number, line in enumerate(source, start=1):
-            yield _decode_input_line(line, line_number)
+    for line_number, decoded in _iter_json_objects(input_path, version="V9"):
+        yield _decode_candidate_row(decoded, line_number)
 
 
 def _decode_input_line(line: str, line_number: int) -> _CandidateRow:
-    if not line.strip():
-        raise ValueError(f"V9 JSONL line {line_number} is empty")
-    decoded = _decode_object(line, line_number)
+    decoded = _decode_json_object_line(line, line_number, version="V9")
+    return _decode_candidate_row(decoded, line_number)
+
+
+def _decode_object(line: str, line_number: int) -> dict[str, Any]:
+    """Preserve the historical object decoder as a shared-boundary alias."""
+    return _decode_json_object_line(line, line_number, version="V9")
+
+
+def _decode_candidate_row(decoded: dict[str, Any], line_number: int) -> _CandidateRow:
     sentences, metadata = _candidate_fields(decoded, line_number)
     return _CandidateRow(
         line_number=line_number,
@@ -592,13 +604,6 @@ def _decode_input_line(line: str, line_number: int) -> _CandidateRow:
         sentences=tuple(sentences),
         metadata=tuple(dict(item) for item in metadata),
     )
-
-
-def _decode_object(line: str, line_number: int) -> dict[str, Any]:
-    decoded = json.loads(line)
-    if not isinstance(decoded, dict):
-        raise ValueError(f"V9 JSONL line {line_number} must be an object")
-    return decoded
 
 
 def _candidate_fields(

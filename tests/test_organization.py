@@ -63,3 +63,9 @@ def test_pipeline_stages_share_the_artifact_io_boundary() -> None:
     assert scanning._atomic_text_output is artifact_io.atomic_text_output
     assert scanning._write_json_line is artifact_io.write_json_line
     assert deduplication._atomic_text_output is artifact_io.atomic_text_output
+
+
+def test_jsonl_stages_share_the_artifact_object_reader() -> None:
+    for stage in (v7, v8, v9, v10):
+        assert stage._decode_json_object_line is artifact_io.decode_json_object_line
+        assert stage._iter_json_objects is artifact_io.iter_json_objects

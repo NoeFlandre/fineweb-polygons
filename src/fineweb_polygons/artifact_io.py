@@ -17,7 +17,9 @@ __all__ = [
     "SHA256_CHUNK_SIZE",
     "atomic_json_write",
     "atomic_text_output",
+    "decode_json_object_line",
     "deterministic_temporary_path",
+    "iter_json_objects",
     "read_json_object",
     "sha256_file",
     "temporary_path",
@@ -95,6 +97,30 @@ def read_json_object(path: Path) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
     return value
+
+
+def decode_json_object_line(
+    line: str, line_number: int, *, version: str
+) -> dict[str, Any]:
+    """Decode one versioned JSONL line and require an object record."""
+    if not line.strip():
+        raise ValueError(f"{version} JSONL line {line_number} is empty")
+    decoded = json.loads(line)
+    if not isinstance(decoded, dict):
+        raise ValueError(f"{version} JSONL line {line_number} must be an object")
+    return decoded
+
+
+def iter_json_objects(
+    path: Path, *, version: str
+) -> Iterator[tuple[int, dict[str, Any]]]:
+    """Yield numbered JSONL object records from a UTF-8 file."""
+    with path.open(encoding="utf-8") as source:
+        for line_number, line in enumerate(source, start=1):
+            yield (
+                line_number,
+                decode_json_object_line(line, line_number, version=version),
+            )
 
 
 def write_json_line(output: Any, value: Mapping[str, object]) -> None:
