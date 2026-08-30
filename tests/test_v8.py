@@ -373,6 +373,28 @@ def test_add_category_documents_counts_repeated_categories() -> None:
     assert counts == {"land_use": 2}
 
 
+def test_matching_categories_preserves_first_match_order() -> None:
+    class Category(str):
+        def __hash__(self) -> int:
+            return 1 if self == "zulu" else 0
+
+    class FakeVocabulary:
+        def match_text(self, text: str) -> tuple[SimpleNamespace, ...]:
+            del text
+            return (
+                SimpleNamespace(category=Category("zulu")),
+                SimpleNamespace(category=Category("alpha")),
+                SimpleNamespace(category=Category("zulu")),
+            )
+
+    assert v8_module._matching_categories(
+        cast(v8_module.TopicVocabulary, FakeVocabulary()), "text"
+    ) == (
+        "zulu",
+        "alpha",
+    )
+
+
 def test_read_rows_uses_utf8_and_reports_original_line_number(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

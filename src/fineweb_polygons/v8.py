@@ -168,7 +168,7 @@ def _write_output(
 
 def _matching_categories(vocabulary: TopicVocabulary, text: str) -> tuple[str, ...]:
     matches = vocabulary.match_text(text)
-    return tuple({match.category for match in matches})
+    return tuple(dict.fromkeys(match.category for match in matches))
 
 
 def _add_category_documents(counts: Counter[str], categories: tuple[str, ...]) -> None:
