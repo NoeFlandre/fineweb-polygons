@@ -66,3 +66,9 @@ def test_manual_mutation_workflow_runs_the_fail_closed_gate() -> None:
     assert mutation_run in workflow
     assert mutation_gate in workflow
     assert workflow.index(mutation_run) < workflow.index(mutation_gate)
+
+
+def test_quality_workflow_exposes_repository_import_paths() -> None:
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "PYTHONPATH: src:." in workflow
