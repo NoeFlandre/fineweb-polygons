@@ -72,3 +72,12 @@ def test_quality_workflow_exposes_repository_import_paths() -> None:
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "PYTHONPATH: src:." in workflow
+
+
+def test_quality_workflow_writes_docs_to_runner_workspace() -> None:
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert (
+        '- run: uv run mkdocs build --strict --site-dir "${{ github.workspace }}/site"'
+        in workflow
+    )

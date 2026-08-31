@@ -31,7 +31,7 @@ jobs:
       - run: uv run ty check src tests
       - run: uv run pytest
       - run: uv run python scripts/check_crap.py --source src --coverage coverage.json --max-crap 6
-      - run: uv run mkdocs build --strict
+      - run: uv run mkdocs build --strict --site-dir "${{ github.workspace }}/site"
 
   mutation:
     if: github.event_name == 'workflow_dispatch'
