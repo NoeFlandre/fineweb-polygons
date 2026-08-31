@@ -42,7 +42,7 @@ addopts = [
     "--strict-markers",
     "--cov=fineweb_polygons",
     "--cov-report=term-missing",
-    "--cov-report=json:/Volumes/Seagate M3/projects/fineweb-polygons/coverage.json",
+    "--cov-report=json",
 ]
 testpaths = ["tests"]
 
@@ -50,7 +50,10 @@ testpaths = ["tests"]
 branch = true
 source = ["src/fineweb_polygons"]
 omit = ["src/fineweb_polygons/__main__.py"]
-data_file = "/Volumes/Seagate M3/projects/fineweb-polygons/.coverage"
+data_file = "${COVERAGE_FILE-/Volumes/Seagate M3/projects/fineweb-polygons/.coverage}"
+
+[tool.coverage.json]
+output = "${COVERAGE_JSON-/Volumes/Seagate M3/projects/fineweb-polygons/coverage.json}"
 
 [tool.coverage.report]
 exclude_also = [
