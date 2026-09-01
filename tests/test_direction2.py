@@ -177,6 +177,83 @@ def test_matcher_returns_no_matches_for_empty_text() -> None:
     assert AhoCorasickPolygonMatcher.build((polygon,)).find("") == ()
 
 
+def test_matcher_does_not_decode_percent_escapes_in_document_text() -> None:
+    polygon = PolygonRecord(
+        polygon_id="monaco/way/10",
+        source_key="monaco",
+        name="A B",
+        aliases=(),
+        tags=(),
+        centroid=None,
+    )
+
+    assert AhoCorasickPolygonMatcher.build((polygon,)).find("A%20B") == ()
+
+
+def test_matcher_skips_unsearchable_names_and_continues_to_aliases() -> None:
+    polygon = PolygonRecord(
+        polygon_id="monaco/way/10",
+        source_key="monaco",
+        name="!!!",
+        aliases=("Valid",),
+        tags=(),
+        centroid=None,
+    )
+
+    matcher = AhoCorasickPolygonMatcher.build((polygon,))
+
+    assert matcher.names_indexed == 1
+    assert [match.matched_alias for match in matcher.find("Valid")] == ["Valid"]
+
+
+def test_matcher_handles_casefold_expansions_and_preserves_match_offsets() -> None:
+    polygon = PolygonRecord(
+        polygon_id="monaco/way/10",
+        source_key="monaco",
+        name="ss",
+        aliases=(),
+        tags=(),
+        centroid=None,
+    )
+
+    matches = AhoCorasickPolygonMatcher.build((polygon,)).find("ß")
+
+    assert [(match.start, match.end) for match in matches] == [(0, 1)]
+
+
+def test_matcher_requires_word_boundaries_at_both_document_edges() -> None:
+    polygon = PolygonRecord(
+        polygon_id="monaco/way/10",
+        source_key="monaco",
+        name="Palais",
+        aliases=(),
+        tags=(),
+        centroid=None,
+    )
+    matcher = AhoCorasickPolygonMatcher.build((polygon,))
+
+    assert [(match.start, match.end) for match in matcher.find("Palais")] == [(0, 6)]
+    assert [(match.start, match.end) for match in matcher.find("xPalais")] == []
+    assert [(match.start, match.end) for match in matcher.find("Palaisx")] == []
+    assert [(match.start, match.end) for match in matcher.find(".Palais")] == [(1, 7)]
+    assert [(match.start, match.end) for match in matcher.find("Palais.")] == [(0, 6)]
+
+
+def test_matcher_maps_offsets_after_a_separator() -> None:
+    polygon = PolygonRecord(
+        polygon_id="monaco/way/10",
+        source_key="monaco",
+        name="Palais",
+        aliases=(),
+        tags=(),
+        centroid=None,
+    )
+
+    matches = AhoCorasickPolygonMatcher.build((polygon,)).find("Prefix: Palais")
+
+    assert [(match.start, match.end) for match in matches] == [(8, 14)]
+
+
 def test_sentence_context_includes_one_neighbor_each_side() -> None:
     text = "Before. Palais is visible. After. Last."
     spans = split_sentences(text)
@@ -402,3 +479,105 @@ def test_dataset_card_is_deterministic_and_uses_manifest_counts() -> None:
     assert "3 unique normalized names" in first
     assert "3 FineWeb documents" in first
     assert "monaco" in first
+
+
+def test_dataset_card_matches_the_complete_stable_contract() -> None:
+    manifest = {
+        "polygon_inventory": {
+            "polygons_read": 2,
+            "names_indexed": 3,
+        },
+        "results": {
+            "fineweb_docs_scanned": 3,
+            "matches_found": 2,
+            "unique_polygons_matched": 2,
+        },
+        "countries": {
+            "monaco": {"matches_found": 1},
+            "liechtenstein": {"matches_found": 1},
+        },
+    }
+
+    assert render_dataset_card(manifest) == (
+        "---\n"
+        "config_name: direction_2_lexical_v1\n"
+        "---\n"
+        "# Direction 2 — lexical polygon candidates\n"
+        "\n"
+        "This artifact is a lexical candidate-generation POC. It scans the FineWeb "
+        "shard for OSM polygon names and `name:*` aliases.\n"
+        "\n"
+        "## Measured run\n"
+        "\n"
+        "- 2 polygon objects read\n"
+        "- 3 unique normalized names indexed\n"
+        "- 3 FineWeb documents scanned\n"
+        "- 2 name mentions written\n"
+        "- 2 unique polygons matched\n"
+        "\n"
+        "## Rule\n"
+        "\n"
+        "A row is written for every boundary-aware name or alias mention in the "
+        "FineWeb document text. The row contains the matching sentence and the "
+        "sentence immediately before and after it when available.\n"
+        "\n"
+        "No URL matching, LLM, embedding, thematic filter, or geographic "
+        "disambiguation is used.\n"
+        "\n"
+        "## Columns\n"
+        "\n"
+        "| Column | Meaning |\n"
+        "| --- | --- |\n"
+        "| `polygon_id` | stable source/object identifier |\n"
+        "| `polygon_name` | OSM main `name` value |\n"
+        "| `matched_alias` | name or alias value that matched |\n"
+        "| `osm_tags` | all OSM tags as sorted JSON |\n"
+        "| `centroid` | centroid as JSON with latitude and longitude |\n"
+        "| `fineweb_url` | FineWeb document URL |\n"
+        "| `sentence` | the sentence containing the match |\n"
+        "| `context` | the sentence plus one neighboring sentence on each side |\n"
+        "\n"
+        "## Source splits\n"
+        "\n"
+        "| Source | Matches |\n"
+        "| --- | ---: |\n"
+        "| `liechtenstein` | 1 |\n"
+        "| `monaco` | 1 |\n"
+        "\n"
+        "This card is generated deterministically from the run manifest. The full "
+        "Direction 2 contract is in the [GitHub direction README](https://github.com/"
+        "NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/"
+        "README.md); the frozen Direction 1 archive remains in the same repository.\n"
+    )
+
+
+@pytest.mark.parametrize("field", ("polygon_inventory", "results", "countries"))
+def test_dataset_card_rejects_non_object_manifest_fields(field: str) -> None:
+    manifest = {
+        "polygon_inventory": {"polygons_read": 1, "names_indexed": 1},
+        "results": {
+            "fineweb_docs_scanned": 1,
+            "matches_found": 1,
+            "unique_polygons_matched": 1,
+        },
+        "countries": {"monaco": {"matches_found": 1}},
+    }
+    manifest[field] = []
+
+    with pytest.raises(ValueError, match=f"manifest field {field!r}"):
+        render_dataset_card(manifest)
+
+
+def test_dataset_card_rejects_a_non_object_country_summary() -> None:
+    manifest = {
+        "polygon_inventory": {"polygons_read": 1, "names_indexed": 1},
+        "results": {
+            "fineweb_docs_scanned": 1,
+            "matches_found": 1,
+            "unique_polygons_matched": 1,
+        },
+        "countries": {"monaco": []},
+    }
+
+    with pytest.raises(ValueError, match="manifest field 'country'"):
+        render_dataset_card(manifest)

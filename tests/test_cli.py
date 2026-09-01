@@ -192,6 +192,9 @@ def test_cli_parser_exposes_exact_scan_contract() -> None:
 def test_cli_parser_exposes_direction2_lexical_contract() -> None:
     parser = _build_parser()
 
+    with pytest.raises(SystemExit):
+        parser.parse_args(["direction2-lexical-v1"])
+
     parsed = parser.parse_args(
         [
             "direction2-lexical-v1",
