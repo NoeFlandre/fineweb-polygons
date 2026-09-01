@@ -2,7 +2,10 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-This project will connect OpenStreetMap polygons to relevant, high-confidence documents from FineWeb. The initial working area is Monaco.
+This project connects OpenStreetMap polygons to relevant, high-confidence
+documents from FineWeb. The first complete approach is preserved as
+[Direction 1: FineWeb polygon retrieval](directions/fineweb-retrieval/README.md). The
+initial working areas are Monaco and Liechtenstein.
 
 The current V1, V2, V3, and V4 releases add narrow, resumable exact-match baselines over one FineWeb 10BT Parquet shard and Monaco polygon profiles. V5 adds the first frequency-filtered runs for Monaco and Liechtenstein. V6 adds a 500-character local text-span rule and sentence evidence. V7 post-processes V6 with `sat-3l-sm` and stores an ordered sentence list while retaining the complete text. V8 filters V7 with a fixed strong-topic vocabulary. V9 keeps topic sentences near polygon evidence. V10 classifies those candidates with a local LFM model and publishes only `yes` sentences. Their immutable contracts are documented in the version guide.
 
@@ -10,6 +13,13 @@ The [dataset catalog](dataset-catalog.md) maps every public data file to its
 version, country split, standalone README, and manifest. The same catalog is
 available as [JSON in the repository](dataset-catalog.json) and in the public
 [Hugging Face metadata directory](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/tree/main/metadata).
+
+## Direction boundary
+
+Direction 1 is a frozen exploratory baseline, not the only planned solution.
+Its V1–V10 meanings and public HF paths are preserved for comparison. A new
+retrieval idea should receive a new direction ID, documentation, code/output
+namespace, and HF paths rather than changing this line.
 
 ## Current boundaries
 

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "direction_id": "direction-1-fineweb-retrieval",
+  "name": "FineWeb polygon retrieval",
+  "status": "frozen",
+  "latest_version": "v10",
+  "versions": [
+    "v1",
+    "v2",
+    "v3",
+    "v4",
+    "v5",
+    "v6",
+    "v7",
+    "v8",
+    "v9",
+    "v10"
+  ],
+  "github": "https://github.com/NoeFlandre/fineweb-polygons",
+  "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
+  "github_snapshot_tag": "direction-1-fineweb-retrieval-v10",
+  "documentation": {
+    "direction_readme": "docs/directions/fineweb-retrieval/README.md",
+    "version_guide": "docs/versions.md",
+    "dataset_catalog": "docs/dataset-catalog.md"
+  },
+  "source": {
+    "fineweb": "HuggingFaceFW/fineweb sample/10BT/000_00000.parquet",
+    "countries": [
+      "Monaco",
+      "Liechtenstein"
+    ],
+    "document_count": 1048581,
+    "approximate_size_gb": 2.0,
+    "whitespace_word_count": 539338878,
+    "fineweb_token_count": 726306534
+  },
+  "storage_policy": "Raw FineWeb, OSM PBFs, models, caches, checkpoints, logs, and generated run artifacts remain on the Seagate project volume; GitHub and Hugging Face contain code, documentation, metadata, and filtered public evidence.",
+  "versioning_policy": "V1 through V10 are immutable. A changed rule or public output contract receives a new version and path; a genuinely different approach receives a new direction ID."
+}

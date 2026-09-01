@@ -2,6 +2,11 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
+These V1–V10 contracts belong to [Direction 1: FineWeb polygon retrieval](directions/fineweb-retrieval/README.md),
+which is frozen as the first baseline. The direction archive explains the
+scope, handoff boundary, and why a different approach should use a new
+direction ID.
+
 Version IDs are immutable contracts. A future change to a selection or matching rule must be published as a new version, such as `v3`; it must not overwrite the meaning of `v1` or `v2`. V7, V8, V9, and V10 are post-processing versions: V7 adds sentence lists to V6, V8 filters those V7 rows at document level, V9 filters V8 sentences without changing polygon matching, and V10 classifies V9 candidate sentences with a local LFM model.
 
 ## V1

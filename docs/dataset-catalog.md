@@ -2,6 +2,11 @@
 
 The public dataset is [NoeFlandre/fineweb-polygons on Hugging Face](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons). The source code and runnable contracts are in the [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons). The machine-readable catalog is available as [`docs/dataset-catalog.json`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.json) and as [`metadata/catalog.json`](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json).
 
+All entries in this catalog belong to [Direction 1: FineWeb polygon retrieval](directions/fineweb-retrieval/README.md),
+the frozen first approach. Its V1–V10 artifacts remain available for
+comparison; a genuinely different approach must use a new direction ID and
+new public paths.
+
 All published V1–V10 paths are historical and immutable. A changed rule gets a
 new version and a new path. Each version also has a standalone README beside
 its data and a manifest or metadata file describing its inputs and settings.

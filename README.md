@@ -70,6 +70,11 @@ configs:
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
+The repository currently preserves one complete research line as [Direction 1:
+FineWeb polygon retrieval](https://noeflandre.github.io/fineweb-polygons/directions/fineweb-retrieval/).
+It contains the V1–V10 experiment history and is frozen as a baseline for a
+separate future direction.
+
 The [public dataset catalog](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json) maps every immutable V1–V10 file to its country split, standalone version README, and reproducibility manifest. The readable [GitHub catalog](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md) and [HF metadata README](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/README.md) link back to both projects.
 
 FineWeb Polygons finds high-confidence FineWeb documents that are directly tied to OpenStreetMap polygons. V1 through V4 use Monaco; V5 through V10 run the experiment for Monaco and Liechtenstein. Raw OSM extracts are kept outside the repository at:

@@ -17,6 +17,17 @@ files are immutable; use a new version and output path for a changed contract.
 The Seagate cleanup archive is recoverable and records SHA-256 values in
 `archive/legacy/2026-08-26/move-manifest.json`.
 
+## Direction boundary
+
+The current code and V1–V10 contracts form
+[Direction 1: FineWeb polygon retrieval](directions/fineweb-retrieval/README.md). Its
+latest frozen baseline is V10. Quality, test, and documentation maintenance may
+continue on `main`, but a changed selection rule, sentence boundary, classifier
+contract, or public schema must use a new version and path. A genuinely
+different approach must use a new `direction-2-*` ID, its own documentation and
+output namespace, and a linked HF record. Never overwrite a Direction 1
+artifact.
+
 ## V1 shard scan
 
 The first V1 input is FineWeb's `sample/10BT/000_00000.parquet` shard. Keep the Hugging Face cache on the Seagate and download only that file:

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_date": "2026-08-28",
+  "catalog_date": "2026-09-01",
   "dataset": {
     "id": "NoeFlandre/fineweb-polygons",
     "license": "odc-by",
@@ -8,6 +8,16 @@
     "github": "https://github.com/NoeFlandre/fineweb-polygons",
     "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
     "fineweb_source": "HuggingFaceFW/fineweb sample/10BT/000_00000.parquet"
+  },
+  "direction": {
+    "id": "direction-1-fineweb-retrieval",
+    "name": "FineWeb polygon retrieval",
+    "status": "frozen",
+    "latest_version": "v10",
+    "versions": ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"],
+    "readme": "docs/directions/fineweb-retrieval/README.md",
+    "record": "metadata/directions/direction-1-fineweb-retrieval.json",
+    "github_snapshot_tag": "direction-1-fineweb-retrieval-v10"
   },
   "immutability": {
     "historical_paths_are_immutable": true,
