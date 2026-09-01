@@ -11,6 +11,11 @@ from fineweb_polygons.direction2 import (
     Direction2RunSummary,
     run_direction2,
 )
+from fineweb_polygons.direction2.v2_models import (
+    Direction2V2RunConfig,
+    Direction2V2RunSummary,
+)
+from fineweb_polygons.direction2.v2_pipeline import run_direction2_v2
 from fineweb_polygons.foundation import (
     DATA_ROOT_ENVIRONMENT_VARIABLE,
     DEFAULT_DATA_ROOT,
@@ -36,6 +41,7 @@ V8Runner = Callable[[V8RunConfig], V8RunSummary]
 V9Runner = Callable[[V9RunConfig], V9RunSummary]
 V10Runner = Callable[[V10RunConfig], V10RunSummary]
 Direction2Runner = Callable[[Direction2RunConfig], Direction2RunSummary]
+Direction2V2Runner = Callable[[Direction2V2RunConfig], Direction2V2RunSummary]
 
 
 def main(
@@ -47,6 +53,7 @@ def main(
     v9_runner: V9Runner = run_v9,
     v10_runner: V10Runner = run_v10,
     direction2_runner: Direction2Runner = run_direction2,
+    direction2_v2_runner: Direction2V2Runner = run_direction2_v2,
 ) -> int:
     """Run the requested command and return a shell exit code."""
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -62,6 +69,9 @@ def main(
         "filter-v9": lambda: _run_filter_v9(parsed, v9_runner),
         "filter-v10": lambda: _run_filter_v10(parsed, v10_runner),
         "direction2-lexical-v1": lambda: _run_direction2(parsed, direction2_runner),
+        "direction2-lexical-v2": lambda: _run_direction2_v2(
+            parsed, direction2_v2_runner
+        ),
     }
     handler = handlers.get(parsed.command)
     if handler is None:
@@ -135,6 +145,21 @@ def _build_parser() -> argparse.ArgumentParser:
     lexical.add_argument("--log", type=Path)
     lexical.add_argument("--batch-size", type=int, default=8192)
     lexical.add_argument("--output-batch-size", type=int, default=4096)
+    lexical_v2 = commands.add_parser(
+        "direction2-lexical-v2",
+        help="scan FineWeb with specificity-aware Aho-Corasick matching",
+    )
+    lexical_v2.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
+    lexical_v2.add_argument("--monaco-pbf", type=Path)
+    lexical_v2.add_argument("--liechtenstein-pbf", type=Path)
+    lexical_v2.add_argument("--shard", type=Path, required=True)
+    lexical_v2.add_argument("--output-dir", type=Path)
+    lexical_v2.add_argument("--manifest", type=Path)
+    lexical_v2.add_argument("--dataset-card", type=Path)
+    lexical_v2.add_argument("--log", type=Path)
+    lexical_v2.add_argument("--name-inventory", type=Path)
+    lexical_v2.add_argument("--batch-size", type=int, default=8192)
+    lexical_v2.add_argument("--output-batch-size", type=int, default=4096)
     return parser
 
 
@@ -237,6 +262,18 @@ def _run_direction2(parsed: argparse.Namespace, runner: Direction2Runner) -> int
     )
 
 
+def _run_direction2_v2(
+    parsed: argparse.Namespace,
+    runner: Direction2V2Runner,
+) -> int:
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: _direction2_v2_config(parsed, paths),
+        runner=runner,
+        summary_record=_direction2_v2_summary_record,
+    )
+
+
 def _direction2_config(
     parsed: argparse.Namespace,
     paths: ProjectPaths,
@@ -268,6 +305,48 @@ def _direction2_config(
             paths,
             parsed.log,
             paths.logs_dir / "direction-2/lexical-v1/run.jsonl",
+        ),
+        batch_size=parsed.batch_size,
+        output_batch_size=parsed.output_batch_size,
+    )
+
+
+def _direction2_v2_config(
+    parsed: argparse.Namespace,
+    paths: ProjectPaths,
+) -> Direction2V2RunConfig:
+    return Direction2V2RunConfig(
+        monaco_pbf=_direction2_path(
+            paths, parsed.monaco_pbf, paths.raw_dir / "monaco-latest.osm.pbf"
+        ),
+        liechtenstein_pbf=_direction2_path(
+            paths,
+            parsed.liechtenstein_pbf,
+            paths.raw_dir / "liechtenstein-latest.osm.pbf",
+        ),
+        shard_path=validate_data_path(paths, parsed.shard),
+        output_dir=_direction2_path(
+            paths, parsed.output_dir, paths.artifacts_dir / "direction-2/lexical-v2"
+        ),
+        manifest_path=_direction2_path(
+            paths,
+            parsed.manifest,
+            paths.runs_dir / "direction-2/lexical-v2/manifest.json",
+        ),
+        dataset_card_path=_direction2_path(
+            paths,
+            parsed.dataset_card,
+            paths.artifacts_dir / "direction-2/lexical-v2/dataset-card.md",
+        ),
+        log_path=_direction2_path(
+            paths,
+            parsed.log,
+            paths.logs_dir / "direction-2/lexical-v2/run.jsonl",
+        ),
+        name_inventory_path=_direction2_path(
+            paths,
+            parsed.name_inventory,
+            paths.runs_dir / "direction-2/lexical-v2/name-inventory.json",
         ),
         batch_size=parsed.batch_size,
         output_batch_size=parsed.output_batch_size,
@@ -379,5 +458,11 @@ def _v10_summary_record(summary: V10RunSummary) -> dict[str, object]:
 
 def _direction2_summary_record(
     summary: Direction2RunSummary,
+) -> dict[str, object]:
+    return summary.to_record()
+
+
+def _direction2_v2_summary_record(
+    summary: Direction2V2RunSummary,
 ) -> dict[str, object]:
     return summary.to_record()

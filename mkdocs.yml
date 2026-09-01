@@ -21,6 +21,7 @@ nav:
       - Registry: directions/README.md
       - "Direction 1: FineWeb retrieval": directions/fineweb-retrieval/README.md
       - "Direction 2: lexical candidates": directions/lexical-candidates/README.md
+      - "Direction 2 lexical V2": directions/lexical-candidates/lexical-v2/README.md
   - Versions: versions.md
   - Dataset catalog: dataset-catalog.md
   - Architecture:

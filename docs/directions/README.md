@@ -11,7 +11,7 @@ outputs, and limitations. A version is one immutable step inside a direction.
 | Direction | Status | Versions | Purpose |
 | --- | --- | --- | --- |
 | [Direction 1: FineWeb polygon retrieval](fineweb-retrieval/README.md) | Frozen | V1–V10 | Lexically retrieve FineWeb evidence for OSM polygon names, then narrow it to topic sentences and local-model `yes` sentences. |
-| [Direction 2: lexical polygon candidates](lexical-candidates/README.md) | Active POC | lexical-v1 | Validate large-scale lexical candidate generation with all OSM areas, names, aliases, and Aho–Corasick matching. |
+| [Direction 2: lexical polygon candidates](lexical-candidates/README.md) | Active POC | lexical-v1, lexical-v2 | Validate large-scale lexical candidate generation, then reduce generic-name noise with deterministic specificity rules. |
 
 Direction 1 is the complete first approach. Its public artifacts remain
 available in the [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons), and its source and contracts remain in this GitHub repository.
@@ -34,5 +34,6 @@ available in the [Hugging Face dataset](https://huggingface.co/datasets/NoeFland
 Direction 2 is recorded in
 [`metadata/directions/direction-2-lexical-candidates.json`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/metadata/directions/direction-2-lexical-candidates.json).
 Its code lives under `src/fineweb_polygons/direction2/`, and its public files
-use the separate `direction_2_lexical_v1` HF configuration and
-`data/direction-2/lexical-v1/` path.
+use separate versioned HF configurations and paths:
+`direction_2_lexical_v1` / `data/direction-2/lexical-v1/` and
+`direction_2_lexical_v2` / `data/direction-2/lexical-v2/`.

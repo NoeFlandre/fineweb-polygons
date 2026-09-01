@@ -270,11 +270,12 @@ retained 4 across 3 documents.
 
 ## Direction 2: lexical candidates
 
-Direction 2 is a separate research line, not V11. Its first version is
-[`direction-2-lexical-v1`](directions/lexical-candidates/README.md). It reads
-all areas emitted by osmium from the Monaco and Liechtenstein extracts,
-indexes each main `name` and non-empty `name:*` alias in one Aho–Corasick
-automaton, and streams the FineWeb shard document by document.
+Direction 2 is a separate research line, not V11. Its first two versions are
+[`direction-2-lexical-v1`](directions/lexical-candidates/README.md) and
+[`direction-2-lexical-v2`](directions/lexical-candidates/lexical-v2/README.md).
+Both read all areas emitted by osmium from the Monaco and Liechtenstein
+extracts, index main `name` and non-empty `name:*` aliases in one
+Aho–Corasick automaton, and stream the FineWeb shard document by document.
 
 Every boundary-aware mention in FineWeb `text` creates one Parquet row. The row
 contains the OSM ID, main name, matching name/alias, all OSM tags, centroid,
@@ -282,3 +283,11 @@ URL, the matching sentence, and a context window of up to one sentence on each
 side. The URL is metadata only. The POC intentionally performs no
 deduplication, LLM classification, embeddings, thematic filtering, or
 geographic disambiguation.
+
+V2 adds a deterministic frequency pass. It discards names with no letters,
+fewer than three letters, or an exact source-country name. It marks a remaining
+name generic when multiple OSM polygons use it, it appears in more than 0.1%
+of FineWeb documents, or it is a one-token name of at most eight letters.
+Distinctive names are kept directly; generic names require the source country
+to appear independently in the same sentence. The complete decision and
+frequency inventory is saved for audit and resume.

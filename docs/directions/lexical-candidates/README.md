@@ -6,9 +6,12 @@ Direction 2 is a separate lexical candidate-generation POC. It tests whether
 an efficient name matcher can connect FineWeb documents to OSM polygon areas
 before any semantic or geographic filtering is added.
 
-## Version
+## Versions
 
-This direction currently has one version: `direction-2-lexical-v1`.
+This direction currently has two versions:
+
+- [`direction-2-lexical-v1`](#direction-2-lexical-v1), the broad lexical baseline;
+- [`direction-2-lexical-v2`](lexical-v2/README.md), the specificity-aware candidate pass.
 
 ## Inputs
 
@@ -48,6 +51,11 @@ it records:
 - an area-weighted longitude/latitude centroid.
 
 Unnamed areas are counted but cannot produce a name match.
+
+## Direction 2 lexical V1
+
+V1 is the broad baseline. Its exact measured run and output contract are
+documented below. It remains immutable and is not replaced by V2.
 
 ## Candidate rule
 
@@ -91,3 +99,17 @@ version's meaning.
 
 The implementation is in [`src/fineweb_polygons/direction2/`](https://github.com/NoeFlandre/fineweb-polygons/tree/main/src/fineweb_polygons/direction2).
 The frozen first approach remains [Direction 1: FineWeb polygon retrieval](../fineweb-retrieval/README.md).
+
+## Direction 2 lexical V2
+
+V2 is documented in its own standalone contract:
+[`lexical-v2/README.md`](lexical-v2/README.md). It retains the same polygon
+inventory and matcher, but measures OSM name reuse and FineWeb document
+frequency first. It discards unusable names, keeps distinctive names directly,
+and requires the source country in the same sentence for generic names. Its
+outputs live under the separate HF configuration `direction_2_lexical_v2` and
+the separate `data/direction-2/lexical-v2/` path. On the first shard, it wrote
+4,742 matches across 153 polygons, versus 29,226,160 matches across 237
+polygons for V1. The reduction removes the worst high-frequency noise, but
+rare names that are generic in ordinary language can still pass; V2 has no
+semantic or geographic disambiguation.

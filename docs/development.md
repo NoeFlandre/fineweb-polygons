@@ -159,17 +159,20 @@ streams the FineWeb shard once. The command writes two Parquet splits, a
 progress log, a run manifest, and a deterministic card under the Seagate root:
 
 ```bash
-uv run fineweb-polygons direction2-lexical-v1 \
+uv run fineweb-polygons direction2-lexical-v2 \
   --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
   --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet"
 ```
 
 The defaults read `raw/monaco-latest.osm.pbf` and
 `raw/liechtenstein-latest.osm.pbf`. The output files are
-`artifacts/direction-2/lexical-v1/{monaco,liechtenstein}.parquet`; the command
+`artifacts/direction-2/lexical-v2/{monaco,liechtenstein}.parquet`; the command
 searches only FineWeb `text`, retains the URL as metadata, and emits the
-matching sentence with one sentence of context on each side. It has no LLM,
-embedding, topic, URL, frequency, or geographic-disambiguation stage.
+matching sentence with one sentence of context on each side. V2 first counts
+name reuse in OSM and name document frequency in FineWeb, then requires the
+source country in the same sentence for generic names. It has no LLM,
+embedding, topic, URL, or geographic-disambiguation stage. Use the separate
+`direction2` recipe for the immutable V1 baseline.
 
 ## V9 local sentence-topic filtering
 

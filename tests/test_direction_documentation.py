@@ -15,6 +15,14 @@ _DIRECTION_RECORD = (
 _DIRECTION_2_DOCUMENT = (
     _REPOSITORY_ROOT / "docs" / "directions" / "lexical-candidates" / "README.md"
 )
+_DIRECTION_2_V2_DOCUMENT = (
+    _REPOSITORY_ROOT
+    / "docs"
+    / "directions"
+    / "lexical-candidates"
+    / "lexical-v2"
+    / "README.md"
+)
 _DIRECTION_2_RECORD = (
     _REPOSITORY_ROOT / "metadata" / "directions" / "direction-2-lexical-candidates.json"
 )
@@ -52,18 +60,34 @@ def test_direction2_has_a_separate_contract_and_public_namespace() -> None:
     document = _DIRECTION_2_DOCUMENT.read_text(encoding="utf-8")
 
     assert record["direction_id"] == "direction-2-lexical-candidates"
-    assert record["latest_version"] == "direction-2-lexical-v1"
-    assert record["outputs"]["hf_config"] == "direction_2_lexical_v1"
+    assert record["latest_version"] == "direction-2-lexical-v2"
+    assert record["versions"] == [
+        "direction-2-lexical-v1",
+        "direction-2-lexical-v2",
+    ]
+    assert record["outputs"]["hf_config"] == "direction_2_lexical_v2"
     assert record["outputs"]["data_files"][0]["path"].startswith(
-        "data/direction-2/lexical-v1/"
+        "data/direction-2/lexical-v2/"
+    )
+    assert record["historical_outputs"]["direction-2-lexical-v1"]["hf_config"] == (
+        "direction_2_lexical_v1"
     )
     assert "Aho" in document
     assert "no LLM" in document
+    assert "direction-2-lexical-v2" in document
+    assert "frequency" in _DIRECTION_2_V2_DOCUMENT.read_text(encoding="utf-8")
 
     catalog = json.loads(_CATALOG.read_text(encoding="utf-8"))
     direction2 = catalog["additional_directions"][0]
     assert direction2["id"] == record["direction_id"]
-    assert direction2["huggingface_config"] == record["outputs"]["hf_config"]
+    assert direction2["latest_version"] == "direction-2-lexical-v2"
+    assert direction2["huggingface_config"] == "direction_2_lexical_v2"
+    assert direction2["historical_huggingface_configs"] == ["direction_2_lexical_v1"]
+    assert any(
+        data_file["path"] == "data/direction-2/lexical-v2/monaco.parquet"
+        for version in direction2["versions"]
+        for data_file in version["data_files"]
+    )
 
 
 def test_repository_and_public_catalogs_share_the_same_direction_record() -> None:

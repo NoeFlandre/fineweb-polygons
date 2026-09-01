@@ -40,17 +40,25 @@ LFM snapshot and the derived MLX q4 runtime used for Apple Silicon inference.
 
 ## Direction 2: lexical candidate generation
 
-Direction 2 uses the separate [`direction_2_lexical_v1`](directions/lexical-candidates/README.md)
-configuration. It reads every OSM area from both extracts, indexes the main
-`name` and all non-empty `name:*` values with Aho–Corasick, searches FineWeb
-`text`, and writes one row per boundary-aware mention with sentence ±1 context.
-It does not use the URL as a condition, deduplicate mentions, call a model, or
-perform semantic or geographic filtering.
+Direction 2 uses separate versioned configurations:
+[`direction_2_lexical_v1`](directions/lexical-candidates/README.md) and
+[`direction_2_lexical_v2`](directions/lexical-candidates/lexical-v2/README.md).
+Both read every OSM area from both extracts, index the main `name` and all
+non-empty `name:*` values with Aho–Corasick, search FineWeb `text`, and write
+one row per boundary-aware mention with sentence ±1 context. V2 adds its
+document-frequency and generic-name country gate; neither version uses the URL
+as a condition, calls a model, or performs geographic disambiguation.
 
 | Version | Stage | Public splits | Main decision or addition |
 | --- | --- | --- | --- |
 | Direction 2 lexical-v1 | Candidate generation | Monaco, Liechtenstein | All osmium areas and their names/aliases are matched in streamed FineWeb text; one Parquet row is written per mention. |
+| Direction 2 lexical-v2 | Candidate generation | Monaco, Liechtenstein | V1 plus OSM reuse, FineWeb document-frequency, and short-name rules; generic names require the source country in the same sentence. |
 
 The standalone card is published at
 `data/direction-2/lexical-v1/README.md`; its deterministic run manifest is at
 `metadata/direction-2/lexical-v1/manifest.json`.
+
+V2 has its own standalone card at
+`data/direction-2/lexical-v2/README.md`, deterministic name inventory at
+`metadata/direction-2/lexical-v2/name-inventory.json`, and run manifest at
+`metadata/direction-2/lexical-v2/manifest.json`.

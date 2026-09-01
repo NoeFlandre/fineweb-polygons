@@ -26,17 +26,44 @@
       "id": "direction-2-lexical-candidates",
       "name": "Lexical polygon candidates",
       "status": "active_poc",
-      "latest_version": "direction-2-lexical-v1",
+      "latest_version": "direction-2-lexical-v2",
       "readme": "docs/directions/lexical-candidates/README.md",
       "record": "metadata/directions/direction-2-lexical-candidates.json",
       "github_readme": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md",
-      "huggingface_config": "direction_2_lexical_v1",
+      "huggingface_config": "direction_2_lexical_v2",
+      "historical_huggingface_configs": ["direction_2_lexical_v1"],
       "data_files": [
-        {"split": "monaco", "path": "data/direction-2/lexical-v1/monaco.parquet"},
-        {"split": "liechtenstein", "path": "data/direction-2/lexical-v1/liechtenstein.parquet"}
+        {"split": "monaco", "path": "data/direction-2/lexical-v2/monaco.parquet"},
+        {"split": "liechtenstein", "path": "data/direction-2/lexical-v2/liechtenstein.parquet"}
       ],
-      "manifest_files": ["metadata/direction-2/lexical-v1/manifest.json"],
-      "card": "data/direction-2/lexical-v1/README.md"
+      "manifest_files": [
+        "metadata/direction-2/lexical-v2/manifest.json",
+        "metadata/direction-2/lexical-v2/name-inventory.json"
+      ],
+      "card": "data/direction-2/lexical-v2/README.md",
+      "versions": [
+        {
+          "id": "direction-2-lexical-v1",
+          "hf_config": "direction_2_lexical_v1",
+          "data_files": [
+            {"split": "monaco", "path": "data/direction-2/lexical-v1/monaco.parquet"},
+            {"split": "liechtenstein", "path": "data/direction-2/lexical-v1/liechtenstein.parquet"}
+          ],
+          "manifest": "metadata/direction-2/lexical-v1/manifest.json",
+          "card": "data/direction-2/lexical-v1/README.md"
+        },
+        {
+          "id": "direction-2-lexical-v2",
+          "hf_config": "direction_2_lexical_v2",
+          "data_files": [
+            {"split": "monaco", "path": "data/direction-2/lexical-v2/monaco.parquet"},
+            {"split": "liechtenstein", "path": "data/direction-2/lexical-v2/liechtenstein.parquet"}
+          ],
+          "manifest": "metadata/direction-2/lexical-v2/manifest.json",
+          "name_inventory": "metadata/direction-2/lexical-v2/name-inventory.json",
+          "card": "data/direction-2/lexical-v2/README.md"
+        }
+      ]
     }
   ],
   "immutability": {

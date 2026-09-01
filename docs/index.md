@@ -17,8 +17,9 @@ available as [JSON in the repository](dataset-catalog.json) and in the public
 [Direction 2: lexical polygon candidates](directions/lexical-candidates/README.md)
 is a separate POC for validating fast lexical candidate generation. It reads
 all areas from the Monaco and Liechtenstein extracts, indexes main names and
-`name:*` aliases with Aho–Corasick, and streams the FineWeb shard into Parquet
-without semantic filtering.
+`name:*` aliases with Aho–Corasick, and streams the FineWeb shard into Parquet.
+Its immutable V1 baseline is followed by V2, which measures name specificity
+before retrieval and requires country evidence for generic names.
 
 ## Direction boundary
 

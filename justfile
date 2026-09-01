@@ -52,4 +52,7 @@ scan-v6 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-late
 direction2 shard="/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-direction2" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-direction2" uv run fineweb-polygons direction2-lexical-v1 --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" --shard "{{shard}}"
 
+direction2-v2 shard="/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-direction2-v2" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-direction2" uv run fineweb-polygons direction2-lexical-v2 --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" --shard "{{shard}}"
+
 qa: format-check lint typecheck test crap docs

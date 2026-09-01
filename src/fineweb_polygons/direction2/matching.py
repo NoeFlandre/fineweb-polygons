@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +17,67 @@ from fineweb_polygons.normalization import normalize_for_search
 class _NormalizedText:
     text: str
     offsets: tuple[int, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PatternMatch:
+    """One boundary-aware normalized pattern match."""
+
+    pattern: str
+    start: int
+    end: int
+
+
+class AhoCorasickPatternMatcher:
+    """Match normalized text patterns while preserving source offsets."""
+
+    def __init__(self, automaton: Any, patterns_indexed: int) -> None:
+        self._automaton = automaton
+        self.patterns_indexed = patterns_indexed
+
+    @classmethod
+    def build(cls, patterns: Iterable[str]) -> AhoCorasickPatternMatcher:
+        """Build an automaton over unique normalized patterns."""
+        normalized_patterns = {
+            normalize_for_search(pattern, decode_url=False) for pattern in patterns
+        }
+        normalized_patterns.discard("")
+        if not normalized_patterns:
+            return cls(None, patterns_indexed=0)
+        automaton = ahocorasick.Automaton()
+        for pattern in sorted(normalized_patterns):
+            automaton.add_word(pattern, pattern)
+        automaton.make_automaton()
+        return cls(automaton, patterns_indexed=len(normalized_patterns))
+
+    def find(self, text: str) -> tuple[PatternMatch, ...]:
+        """Return all boundary-aware matches with source-text offsets."""
+        if self._automaton is None:
+            return ()
+        fast_normalized = normalize_for_search(text, decode_url=False)
+        if not fast_normalized:
+            return ()
+        candidates = _pattern_spans(self._automaton, fast_normalized)
+        mapped = _normalize_with_offsets(text)
+        if mapped.text != fast_normalized:
+            candidates = _pattern_spans(self._automaton, mapped.text)
+        return tuple(
+            sorted(
+                (
+                    PatternMatch(
+                        pattern=pattern,
+                        start=mapped.offsets[start],
+                        end=mapped.offsets[end] + 1,
+                    )
+                    for start, end, pattern in candidates
+                ),
+                key=lambda match: (match.start, match.end, match.pattern),
+            )
+        )
+
+    def find_unique_patterns(self, text: str) -> tuple[str, ...]:
+        """Return matching patterns once each in deterministic order."""
+        return tuple(sorted({match.pattern for match in self.find(text)}))
 
 
 class AhoCorasickPolygonMatcher:
@@ -122,6 +184,18 @@ def _candidate_spans(
         start = end - len(pattern) + 1
         if _has_boundaries(text, start, end):
             candidates.append((start, end, values))
+    return candidates
+
+
+def _pattern_spans(
+    automaton: Any,
+    text: str,
+) -> list[tuple[int, int, str]]:
+    candidates = []
+    for end, pattern in automaton.iter(text):
+        start = end - len(pattern) + 1
+        if _has_boundaries(text, start, end):
+            candidates.append((start, end, pattern))
     return candidates
 
 
