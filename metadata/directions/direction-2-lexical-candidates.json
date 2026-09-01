@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "direction_id": "direction-2-lexical-candidates",
+  "name": "Lexical polygon candidates",
+  "status": "active_poc",
+  "latest_version": "direction-2-lexical-v1",
+  "versions": ["direction-2-lexical-v1"],
+  "github": "https://github.com/NoeFlandre/fineweb-polygons",
+  "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
+  "documentation": {
+    "github_direction_readme": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md",
+    "github_catalog": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md",
+    "huggingface_dataset_card": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/README.md",
+    "huggingface_direction_card": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/data/direction-2/lexical-v1/README.md",
+    "huggingface_manifest": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/direction-2/lexical-v1/manifest.json"
+  },
+  "source": {
+    "fineweb": "HuggingFaceFW/fineweb sample/10BT/000_00000.parquet",
+    "countries": ["Monaco", "Liechtenstein"],
+    "raw_data_root": "/Volumes/Seagate M3/projects/fineweb-polygons"
+  },
+  "contract": {
+    "polygon_reader": "all osmium areas from both extracts",
+    "names": "main name and every non-empty name:* alias",
+    "matcher": "Aho-Corasick over NFKC case-folded separator-normalized patterns",
+    "document_field": "text",
+    "url_is_condition": false,
+    "sentence_context": "matching sentence plus one sentence on each side",
+    "deduplicate_mentions": false,
+    "geographic_disambiguation": false,
+    "semantic_filtering": false
+  },
+  "measured_run": {
+    "fineweb_docs_scanned": 1048581,
+    "polygons_read": 27141,
+    "names_indexed": 1578,
+    "matches_found": 29226160,
+    "unique_polygons_matched": 237,
+    "sources": {
+      "monaco": {
+        "polygons_read": 2341,
+        "names_indexed": 926,
+        "matches_found": 28245639,
+        "unique_polygons_matched": 160,
+        "sha256": "5b4c1912100e4666827945de32b4dbff3468760e593b26df9a697c4996564d85"
+      },
+      "liechtenstein": {
+        "polygons_read": 24800,
+        "names_indexed": 652,
+        "matches_found": 980521,
+        "unique_polygons_matched": 77,
+        "sha256": "967aa17e8bc2b00ab17a07c5f3f94da36c00fc2af133ea799d38ff2c2fac1f69"
+      }
+    }
+  },
+  "outputs": {
+    "hf_config": "direction_2_lexical_v1",
+    "data_files": [
+      {"split": "monaco", "path": "data/direction-2/lexical-v1/monaco.parquet"},
+      {"split": "liechtenstein", "path": "data/direction-2/lexical-v1/liechtenstein.parquet"}
+    ],
+    "manifest": "metadata/direction-2/lexical-v1/manifest.json",
+    "readme": "data/direction-2/lexical-v1/README.md"
+  }
+}

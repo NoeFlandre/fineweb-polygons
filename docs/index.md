@@ -14,6 +14,12 @@ version, country split, standalone README, and manifest. The same catalog is
 available as [JSON in the repository](dataset-catalog.json) and in the public
 [Hugging Face metadata directory](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/tree/main/metadata).
 
+[Direction 2: lexical polygon candidates](directions/lexical-candidates/README.md)
+is a separate POC for validating fast lexical candidate generation. It reads
+all areas from the Monaco and Liechtenstein extracts, indexes main names and
+`name:*` aliases with Aho–Corasick, and streams the FineWeb shard into Parquet
+without semantic filtering.
+
 ## Direction boundary
 
 Direction 1 is a frozen exploratory baseline, not the only planned solution.

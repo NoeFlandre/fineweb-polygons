@@ -12,6 +12,12 @@ _DIRECTION_DOCUMENT = (
 _DIRECTION_RECORD = (
     _REPOSITORY_ROOT / "metadata" / "directions" / "direction-1-fineweb-retrieval.json"
 )
+_DIRECTION_2_DOCUMENT = (
+    _REPOSITORY_ROOT / "docs" / "directions" / "lexical-candidates" / "README.md"
+)
+_DIRECTION_2_RECORD = (
+    _REPOSITORY_ROOT / "metadata" / "directions" / "direction-2-lexical-candidates.json"
+)
 _CATALOG = _REPOSITORY_ROOT / "metadata" / "catalog.json"
 _REPOSITORY_CATALOG = _REPOSITORY_ROOT / "docs" / "dataset-catalog.json"
 _MKDOCS_CONFIG = _REPOSITORY_ROOT / "mkdocs.yml"
@@ -41,6 +47,25 @@ def test_catalog_points_to_the_frozen_direction() -> None:
     ]
 
 
+def test_direction2_has_a_separate_contract_and_public_namespace() -> None:
+    record = json.loads(_DIRECTION_2_RECORD.read_text(encoding="utf-8"))
+    document = _DIRECTION_2_DOCUMENT.read_text(encoding="utf-8")
+
+    assert record["direction_id"] == "direction-2-lexical-candidates"
+    assert record["latest_version"] == "direction-2-lexical-v1"
+    assert record["outputs"]["hf_config"] == "direction_2_lexical_v1"
+    assert record["outputs"]["data_files"][0]["path"].startswith(
+        "data/direction-2/lexical-v1/"
+    )
+    assert "Aho" in document
+    assert "no LLM" in document
+
+    catalog = json.loads(_CATALOG.read_text(encoding="utf-8"))
+    direction2 = catalog["additional_directions"][0]
+    assert direction2["id"] == record["direction_id"]
+    assert direction2["huggingface_config"] == record["outputs"]["hf_config"]
+
+
 def test_repository_and_public_catalogs_share_the_same_direction_record() -> None:
     public_catalog = json.loads(_CATALOG.read_text(encoding="utf-8"))
     repository_catalog = json.loads(_REPOSITORY_CATALOG.read_text(encoding="utf-8"))
@@ -48,6 +73,10 @@ def test_repository_and_public_catalogs_share_the_same_direction_record() -> Non
     assert repository_catalog["catalog_date"] == public_catalog["catalog_date"]
     assert repository_catalog["direction"] == public_catalog["direction"]
     assert repository_catalog["versions"] == public_catalog["versions"]
+    assert (
+        repository_catalog["additional_directions"]
+        == public_catalog["additional_directions"]
+    )
 
 
 def test_direction_document_covers_each_version_and_handoff() -> None:

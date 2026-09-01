@@ -6,6 +6,11 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from fineweb_polygons.direction2 import (
+    Direction2RunConfig,
+    Direction2RunSummary,
+    run_direction2,
+)
 from fineweb_polygons.foundation import (
     DATA_ROOT_ENVIRONMENT_VARIABLE,
     DEFAULT_DATA_ROOT,
@@ -30,6 +35,7 @@ V7Runner = Callable[[V7RunConfig], V7RunSummary]
 V8Runner = Callable[[V8RunConfig], V8RunSummary]
 V9Runner = Callable[[V9RunConfig], V9RunSummary]
 V10Runner = Callable[[V10RunConfig], V10RunSummary]
+Direction2Runner = Callable[[Direction2RunConfig], Direction2RunSummary]
 
 
 def main(
@@ -40,6 +46,7 @@ def main(
     v8_runner: V8Runner = run_v8,
     v9_runner: V9Runner = run_v9,
     v10_runner: V10Runner = run_v10,
+    direction2_runner: Direction2Runner = run_direction2,
 ) -> int:
     """Run the requested command and return a shell exit code."""
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -54,6 +61,7 @@ def main(
         "filter-v8": lambda: _run_filter_v8(parsed, v8_runner),
         "filter-v9": lambda: _run_filter_v9(parsed, v9_runner),
         "filter-v10": lambda: _run_filter_v10(parsed, v10_runner),
+        "direction2-lexical-v1": lambda: _run_direction2(parsed, direction2_runner),
     }
     handler = handlers.get(parsed.command)
     if handler is None:
@@ -113,6 +121,20 @@ def _build_parser() -> argparse.ArgumentParser:
     llm.add_argument("--checkpoint", type=Path)
     llm.add_argument("--batch-size", type=int, default=8)
     llm.add_argument("--max-new-tokens", type=int, default=V10_MAX_NEW_TOKENS)
+    lexical = commands.add_parser(
+        "direction2-lexical-v1",
+        help="scan FineWeb for OSM polygon name candidates with Aho-Corasick",
+    )
+    lexical.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
+    lexical.add_argument("--monaco-pbf", type=Path)
+    lexical.add_argument("--liechtenstein-pbf", type=Path)
+    lexical.add_argument("--shard", type=Path, required=True)
+    lexical.add_argument("--output-dir", type=Path)
+    lexical.add_argument("--manifest", type=Path)
+    lexical.add_argument("--dataset-card", type=Path)
+    lexical.add_argument("--log", type=Path)
+    lexical.add_argument("--batch-size", type=int, default=8192)
+    lexical.add_argument("--output-batch-size", type=int, default=4096)
     return parser
 
 
@@ -204,6 +226,60 @@ def _run_filter_v10(parsed: argparse.Namespace, runner: V10Runner) -> int:
         runner=runner,
         summary_record=_v10_summary_record,
     )
+
+
+def _run_direction2(parsed: argparse.Namespace, runner: Direction2Runner) -> int:
+    return _run_external_stage(
+        parsed.data_root,
+        config_factory=lambda paths: _direction2_config(parsed, paths),
+        runner=runner,
+        summary_record=_direction2_summary_record,
+    )
+
+
+def _direction2_config(
+    parsed: argparse.Namespace,
+    paths: ProjectPaths,
+) -> Direction2RunConfig:
+    return Direction2RunConfig(
+        monaco_pbf=_direction2_path(
+            paths, parsed.monaco_pbf, paths.raw_dir / "monaco-latest.osm.pbf"
+        ),
+        liechtenstein_pbf=_direction2_path(
+            paths,
+            parsed.liechtenstein_pbf,
+            paths.raw_dir / "liechtenstein-latest.osm.pbf",
+        ),
+        shard_path=validate_data_path(paths, parsed.shard),
+        output_dir=_direction2_path(
+            paths, parsed.output_dir, paths.artifacts_dir / "direction-2/lexical-v1"
+        ),
+        manifest_path=_direction2_path(
+            paths,
+            parsed.manifest,
+            paths.runs_dir / "direction-2/lexical-v1/manifest.json",
+        ),
+        dataset_card_path=_direction2_path(
+            paths,
+            parsed.dataset_card,
+            paths.artifacts_dir / "direction-2/lexical-v1/dataset-card.md",
+        ),
+        log_path=_direction2_path(
+            paths,
+            parsed.log,
+            paths.logs_dir / "direction-2/lexical-v1/run.jsonl",
+        ),
+        batch_size=parsed.batch_size,
+        output_batch_size=parsed.output_batch_size,
+    )
+
+
+def _direction2_path(
+    paths: ProjectPaths,
+    value: Path | None,
+    default: Path,
+) -> Path:
+    return validate_data_path(paths, default if value is None else value)
 
 
 def _project_paths(data_root: Path) -> ProjectPaths:
@@ -299,3 +375,9 @@ def _v10_summary_record(summary: V10RunSummary) -> dict[str, object]:
         "rows_processed": summary.rows_processed,
         "yes_sentences_written": summary.yes_sentences_written,
     }
+
+
+def _direction2_summary_record(
+    summary: Direction2RunSummary,
+) -> dict[str, object]:
+    return summary.to_record()

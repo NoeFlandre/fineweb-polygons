@@ -21,6 +21,24 @@
     "github_readme": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md",
     "huggingface_readme": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/README.md"
   },
+  "additional_directions": [
+    {
+      "id": "direction-2-lexical-candidates",
+      "name": "Lexical polygon candidates",
+      "status": "active_poc",
+      "latest_version": "direction-2-lexical-v1",
+      "readme": "docs/directions/lexical-candidates/README.md",
+      "record": "metadata/directions/direction-2-lexical-candidates.json",
+      "github_readme": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md",
+      "huggingface_config": "direction_2_lexical_v1",
+      "data_files": [
+        {"split": "monaco", "path": "data/direction-2/lexical-v1/monaco.parquet"},
+        {"split": "liechtenstein", "path": "data/direction-2/lexical-v1/liechtenstein.parquet"}
+      ],
+      "manifest_files": ["metadata/direction-2/lexical-v1/manifest.json"],
+      "card": "data/direction-2/lexical-v1/README.md"
+    }
+  ],
   "immutability": {
     "historical_paths_are_immutable": true,
     "rule": "A changed retrieval or output contract receives a new version identifier and path.",

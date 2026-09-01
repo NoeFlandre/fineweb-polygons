@@ -7,6 +7,9 @@ import pytest
 
 import fineweb_polygons.cli as cli_module
 from fineweb_polygons.cli import _build_parser, main
+from fineweb_polygons.direction2.models import (
+    Direction2RunSummary,
+)
 from fineweb_polygons.foundation import DEFAULT_DATA_ROOT
 from fineweb_polygons.runs import RunSummary
 from fineweb_polygons.v7 import V7RunSummary
@@ -184,6 +187,123 @@ def test_cli_parser_exposes_exact_scan_contract() -> None:
         ).country_name
         == "Liechtenstein"
     )
+
+
+def test_cli_parser_exposes_direction2_lexical_contract() -> None:
+    parser = _build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "direction2-lexical-v1",
+            "--shard",
+            "shard.parquet",
+            "--monaco-pbf",
+            "monaco.osm.pbf",
+            "--liechtenstein-pbf",
+            "liechtenstein.osm.pbf",
+        ]
+    )
+
+    assert parsed.command == "direction2-lexical-v1"
+    assert parsed.data_root == DEFAULT_DATA_ROOT
+    assert parsed.shard == Path("shard.parquet")
+    assert parsed.monaco_pbf == Path("monaco.osm.pbf")
+    assert parsed.liechtenstein_pbf == Path("liechtenstein.osm.pbf")
+    assert parsed.batch_size == 8192
+    assert parsed.output_batch_size == 4096
+    assert "Aho" in parser.format_help()
+
+
+def test_cli_runs_direction2_and_serializes_its_summary(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "external"
+    captured = {}
+
+    def fake_runner(config):
+        captured["config"] = config
+        return Direction2RunSummary(
+            output_paths=(data_root / "output" / "monaco.parquet",),
+            manifest_path=data_root / "runs" / "manifest.json",
+            dataset_card_path=data_root / "output" / "card.md",
+            log_path=data_root / "logs" / "run.jsonl",
+            polygons_read=4,
+            names_indexed=5,
+            fineweb_docs_scanned=6,
+            matches_found=7,
+            unique_polygons_matched=3,
+            country_summaries=(),
+        )
+
+    assert (
+        main(
+            [
+                "direction2-lexical-v1",
+                "--data-root",
+                str(data_root),
+                "--shard",
+                str(data_root / "raw" / "shard.parquet"),
+                "--monaco-pbf",
+                str(data_root / "raw" / "monaco.osm.pbf"),
+                "--liechtenstein-pbf",
+                str(data_root / "raw" / "liechtenstein.osm.pbf"),
+                "--output-dir",
+                str(data_root / "artifacts" / "d2"),
+                "--manifest",
+                str(data_root / "runs" / "d2.json"),
+                "--dataset-card",
+                str(data_root / "artifacts" / "d2" / "card.md"),
+                "--log",
+                str(data_root / "logs" / "d2.jsonl"),
+                "--batch-size",
+                "16",
+                "--output-batch-size",
+                "8",
+            ],
+            direction2_runner=fake_runner,
+        )
+        == 0
+    )
+
+    config = captured["config"]
+    assert config.monaco_pbf == data_root / "raw" / "monaco.osm.pbf"
+    assert config.liechtenstein_pbf == data_root / "raw" / "liechtenstein.osm.pbf"
+    assert config.shard_path == data_root / "raw" / "shard.parquet"
+    assert config.output_dir == data_root / "artifacts" / "d2"
+    assert config.manifest_path == data_root / "runs" / "d2.json"
+    assert config.dataset_card_path == data_root / "artifacts" / "d2" / "card.md"
+    assert config.log_path == data_root / "logs" / "d2.jsonl"
+    assert config.batch_size == 16
+    assert config.output_batch_size == 8
+    assert json.loads(capsys.readouterr().out)["matches_found"] == 7
+
+
+def test_direction2_config_factory_uses_external_defaults(tmp_path: Path) -> None:
+    data_root = tmp_path / "external"
+    paths = cli_module._project_paths(data_root)
+    parsed = argparse.Namespace(
+        monaco_pbf=None,
+        liechtenstein_pbf=None,
+        shard=data_root / "raw/shard.parquet",
+        output_dir=None,
+        manifest=None,
+        dataset_card=None,
+        log=None,
+        batch_size=8,
+        output_batch_size=4,
+    )
+
+    config = cli_module._direction2_config(parsed, paths)
+
+    assert config.monaco_pbf == data_root / "raw/monaco-latest.osm.pbf"
+    assert config.liechtenstein_pbf == (data_root / "raw/liechtenstein-latest.osm.pbf")
+    assert config.shard_path == data_root / "raw/shard.parquet"
+    assert config.output_dir == data_root / "artifacts/direction-2/lexical-v1"
+    assert config.manifest_path == (
+        data_root / "runs/direction-2/lexical-v1/manifest.json"
+    )
+    assert config.dataset_card_path == (
+        data_root / "artifacts/direction-2/lexical-v1/dataset-card.md"
+    )
+    assert config.log_path == data_root / "logs/direction-2/lexical-v1/run.jsonl"
 
 
 def test_cli_reports_unknown_commands_with_the_command_name(monkeypatch) -> None:

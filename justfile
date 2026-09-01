@@ -49,4 +49,7 @@ scan-v5 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-late
 scan-v6 shard pbf="/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" country="Monaco" run_id="v6-monaco-10bt-000-v1":
     UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-cleanup" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v8" uv run fineweb-polygons scan --pbf "{{pbf}}" --shard "{{shard}}" --run-id "{{run_id}}" --retrieval-version v6 --country-name "{{country}}"
 
+direction2 shard="/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet":
+    UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-direction2" UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-direction2" uv run fineweb-polygons direction2-lexical-v1 --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" --shard "{{shard}}"
+
 qa: format-check lint typecheck test crap docs

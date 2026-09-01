@@ -7,12 +7,13 @@ The current public experiment is [Direction 1: FineWeb polygon retrieval](https:
 covering immutable V1–V10 artifacts. Its machine-readable record is
 [`directions/direction-1-fineweb-retrieval.json`](directions/direction-1-fineweb-retrieval.json).
 
-The current public experiment is [Direction 1: FineWeb polygon retrieval](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md),
-covering immutable V1–V10 artifacts. Its machine-readable record is
-[`directions/direction-1-fineweb-retrieval.json`](directions/direction-1-fineweb-retrieval.json).
+The separate [Direction 2: lexical polygon candidates](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
+contains the `direction-2-lexical-v1` lexical POC. Its machine-readable record
+is [`directions/direction-2-lexical-candidates.json`](directions/direction-2-lexical-candidates.json).
 
-- [`catalog.json`](catalog.json) maps every immutable V1–V10 data path to its
-  country/split, source version, standalone README, and manifest files.
+- [`catalog.json`](catalog.json) maps every public Direction 1 and Direction 2
+  data path to its country/split, source version, standalone README, and
+  manifest files.
 - Each `data/v*/README.md` is a concise contract for that version.
 - Each manifest records the source fingerprints, settings, counts, and output
   hash needed to reproduce or audit the release.

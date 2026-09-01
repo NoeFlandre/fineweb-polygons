@@ -267,3 +267,18 @@ The public V10 files are separate viewer splits:
 On the first shard, V10 processed 93 Monaco candidate sentences and retained
 62 across 21 documents. It processed 9 Liechtenstein candidate sentences and
 retained 4 across 3 documents.
+
+## Direction 2: lexical candidates
+
+Direction 2 is a separate research line, not V11. Its first version is
+[`direction-2-lexical-v1`](directions/lexical-candidates/README.md). It reads
+all areas emitted by osmium from the Monaco and Liechtenstein extracts,
+indexes each main `name` and non-empty `name:*` alias in one Aho–Corasick
+automaton, and streams the FineWeb shard document by document.
+
+Every boundary-aware mention in FineWeb `text` creates one Parquet row. The row
+contains the OSM ID, main name, matching name/alias, all OSM tags, centroid,
+URL, the matching sentence, and a context window of up to one sentence on each
+side. The URL is metadata only. The POC intentionally performs no
+deduplication, LLM classification, embeddings, thematic filtering, or
+geographic disambiguation.

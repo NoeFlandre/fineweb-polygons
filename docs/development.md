@@ -151,6 +151,26 @@ completed manifest makes a restart reuse the result without scanning the input.
 The vocabulary and run manifests remain on the Seagate and are published as
 HF metadata for reproducibility.
 
+## Direction 2 lexical candidate generation
+
+Direction 2 is independent of V1–V10. It reads all OSM areas from both local
+extracts, indexes their `name` and `name:*` values with Aho–Corasick, and
+streams the FineWeb shard once. The command writes two Parquet splits, a
+progress log, a run manifest, and a deterministic card under the Seagate root:
+
+```bash
+uv run fineweb-polygons direction2-lexical-v1 \
+  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
+  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet"
+```
+
+The defaults read `raw/monaco-latest.osm.pbf` and
+`raw/liechtenstein-latest.osm.pbf`. The output files are
+`artifacts/direction-2/lexical-v1/{monaco,liechtenstein}.parquet`; the command
+searches only FineWeb `text`, retains the URL as metadata, and emits the
+matching sentence with one sentence of context on each side. It has no LLM,
+embedding, topic, URL, frequency, or geographic-disambiguation stage.
+
 ## V9 local sentence-topic filtering
 
 V9 reads the V8 artifacts and keeps only vocabulary-matching sentences within

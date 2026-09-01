@@ -64,6 +64,12 @@ configs:
         path: data/v10/monaco-v10-10bt-000-v1-landuse.jsonl
       - split: liechtenstein
         path: data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl
+  - config_name: direction_2_lexical_v1
+    data_files:
+      - split: monaco
+        path: data/direction-2/lexical-v1/monaco.parquet
+      - split: liechtenstein
+        path: data/direction-2/lexical-v1/liechtenstein.parquet
 ---
 
 # FineWeb Polygons
@@ -83,6 +89,21 @@ FineWeb Polygons finds high-confidence FineWeb documents that are directly tied 
 and `/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf`.
 
 The version ID is part of the public contract. Existing version IDs are not silently changed; a behavior change gets a new version ID.
+
+## Direction 2 — lexical polygon candidates
+
+[Direction 2 documentation](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
+is a separate lexical POC, not V11. It reads every area emitted from the
+Monaco and Liechtenstein OSM extracts, indexes each main `name` and non-empty
+`name:*` alias with Aho–Corasick, and streams the FineWeb shard once. A
+boundary-aware mention in FineWeb `text` creates one Parquet row containing the
+polygon metadata, URL, matching sentence, and up to one sentence on each side.
+
+The URL is retained as provenance but is not searched. This direction has no
+LLM, embeddings, thematic filtering, frequency filter, deduplication, or
+geographic disambiguation. Its standalone card and deterministic manifest are
+published under `data/direction-2/lexical-v1/` and
+`metadata/direction-2/lexical-v1/` on Hugging Face.
 
 ## Version contracts
 
