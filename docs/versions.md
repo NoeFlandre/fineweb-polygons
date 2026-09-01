@@ -2,7 +2,7 @@
 
 [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) · [Hugging Face dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons)
 
-These V1–V10 contracts belong to [Direction 1: FineWeb polygon retrieval](directions/fineweb-retrieval/README.md),
+These V1–V10 contracts belong to [Direction 1: FineWeb polygon retrieval](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md),
 which is frozen as the first baseline. The direction archive explains the
 scope, handoff boundary, and why a different approach should use a new
 direction ID.

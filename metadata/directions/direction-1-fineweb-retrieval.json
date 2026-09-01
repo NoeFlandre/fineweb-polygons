@@ -20,9 +20,12 @@
   "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
   "github_snapshot_tag": "direction-1-fineweb-retrieval-v10",
   "documentation": {
-    "direction_readme": "docs/directions/fineweb-retrieval/README.md",
-    "version_guide": "docs/versions.md",
-    "dataset_catalog": "docs/dataset-catalog.md"
+    "github_direction_readme": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md",
+    "github_version_guide": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/versions.md",
+    "github_dataset_catalog": "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/dataset-catalog.md",
+    "huggingface_dataset_card": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/README.md",
+    "huggingface_version_guide": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/versions.md",
+    "huggingface_catalog": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json"
   },
   "source": {
     "fineweb": "HuggingFaceFW/fineweb sample/10BT/000_00000.parquet",
