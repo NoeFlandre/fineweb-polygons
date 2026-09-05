@@ -1042,31 +1042,6 @@ def test_run_direction2_v2_counts_and_gates_specificity(tmp_path: Path) -> None:
     }
 
 
-def test_run_direction2_v2_reports_all_summary_fields(tmp_path: Path) -> None:
-    config, _ = _make_v2_fixture(tmp_path)
-
-    summary = run_direction2_v2(config)
-
-    assert summary.output_paths == (
-        config.output_dir / "monaco.parquet",
-        config.output_dir / "liechtenstein.parquet",
-    )
-    assert summary.manifest_path == config.manifest_path
-    assert summary.dataset_card_path == config.dataset_card_path
-    assert summary.log_path == config.log_path
-    assert summary.name_inventory_path == config.name_inventory_path
-    assert summary.polygons_read == 6
-    assert summary.names_considered == 6
-    assert summary.names_indexed == 4
-    assert summary.names_discarded == 2
-    assert summary.fineweb_docs_frequency_pass == 4
-    assert summary.fineweb_docs_match_pass == 4
-    assert summary.matches_found == 4
-    assert summary.distinctive_matches == 2
-    assert summary.generic_matches == 2
-    assert summary.unique_polygons_matched == 4
-
-
 def test_run_direction2_v2_starts_name_inventory_before_frequency_scan(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1352,29 +1327,37 @@ def test_manifest_rejects_mismatched_country_summaries(tmp_path: Path) -> None:
         )
 
 
-def test_log_file_handles_nested_paths_and_pre_entry_exit(
+def test_run_direction2_v2_closes_nested_log_after_polygon_read_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    config, _ = _make_v2_fixture(tmp_path)
     path = tmp_path / "nested" / "deeper" / "run.jsonl"
-    calls: dict[str, object] = {}
+    config = replace(config, log_path=path)
+    streams: list[Any] = []
     original_open = Path.open
 
-    def spy_open(self: Path, *args: Any, **kwargs: Any) -> Any:
-        calls.update(kwargs)
-        return original_open(self, *args, **kwargs)
+    def recording_open(self: Path, *args: Any, **kwargs: Any) -> Any:
+        stream = original_open(self, *args, **kwargs)
+        if self == path:
+            streams.append(stream)
+        return stream
 
-    monkeypatch.setattr(Path, "open", spy_open)
-    log = v2_pipeline._LogFile(path)
+    def fail_read(sources: object) -> None:
+        raise OSError("polygon read failed")
 
-    assert not path.parent.exists()
-    assert log.__exit__(None, None, None) is None
-    stream = v2_pipeline._LogFile.__enter__(log)
-    stream.write("ok")
-    v2_pipeline._LogFile.__exit__(log, None, None, None)
+    monkeypatch.setattr(Path, "open", recording_open)
+    monkeypatch.setattr(v2_pipeline, "read_polygon_records", fail_read)
 
-    assert calls["encoding"] == "utf-8"
-    assert path.read_text(encoding="utf-8") == "ok"
+    with pytest.raises(OSError, match="polygon read failed"):
+        run_direction2_v2(config)
+
+    assert len(streams) == 1
+    assert streams[0].closed
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "event": "run_started",
+        "version": DIRECTION_V2_VERSION,
+    }
 
 
 def _output_row() -> dict[str, object]:

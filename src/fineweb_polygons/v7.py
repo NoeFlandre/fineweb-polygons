@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json  # noqa: F401 - preserve the historical module-level patch point
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,9 +12,6 @@ from fineweb_polygons.artifact_io import (
 )
 from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
-)
-from fineweb_polygons.artifact_io import (
-    decode_json_object_line as _decode_json_object_line,
 )
 from fineweb_polygons.artifact_io import (
     iter_json_objects as _iter_json_objects,
@@ -240,11 +236,6 @@ def _read_batches(
             texts = []
     if rows:
         yield rows, tuple(texts)
-
-
-def _decode_input_line(line: str, line_number: int) -> tuple[dict[str, Any], str]:
-    decoded = _decode_json_object_line(line, line_number, version="V6")
-    return decoded, _text_from_row(decoded, line_number)
 
 
 def _text_from_row(decoded: dict[str, Any], line_number: int) -> str:

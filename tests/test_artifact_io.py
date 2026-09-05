@@ -175,7 +175,7 @@ def test_write_json_line_is_sorted_and_unicode_safe() -> None:
     assert output.getvalue() == '{"a": 1, "z": "é"}\n'
 
 
-def test_sha256_file_reads_one_megabyte_chunks(tmp_path: Path) -> None:
+def test_sha256_file_hashes_file_contents(tmp_path: Path) -> None:
     target = tmp_path / "payload.bin"
     target.write_bytes(b"payload")
 
@@ -186,6 +186,7 @@ def test_sha256_file_stops_after_an_empty_chunk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     read_sizes: list[int] = []
+    chunks = iter((b"first", b"second", b"", b"must not be read"))
 
     class Source:
         def __enter__(self) -> Source:
@@ -196,7 +197,7 @@ def test_sha256_file_stops_after_an_empty_chunk(
 
         def read(self, size: int) -> bytes:
             read_sizes.append(size)
-            return b"payload" if len(read_sizes) == 1 else b""
+            return next(chunks)
 
     class FakePath:
         def open(self, mode: str) -> Source:
@@ -205,9 +206,9 @@ def test_sha256_file_stops_after_an_empty_chunk(
 
     assert (
         artifact_io.sha256_file(cast(Path, FakePath()))
-        == hashlib.sha256(b"payload").hexdigest()
+        == hashlib.sha256(b"firstsecond").hexdigest()
     )
-    assert read_sizes == [1024 * 1024, 1024 * 1024]
+    assert read_sizes == [1024 * 1024, 1024 * 1024, 1024 * 1024]
 
 
 def test_json_object_reader_returns_none_for_empty_files(tmp_path: Path) -> None:

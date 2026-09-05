@@ -175,11 +175,10 @@ def test_v3_area_reader_counts_all_unnamed_areas_and_continues(
     monkeypatch.setattr(v3_module.osmium, "FileProcessor", _FakeProcessor)
     monkeypatch.setattr(v3_module, "_select_area", lambda area: next(selections))
 
-    profiles, named_count, unnamed_count = v3_module._read_area_profiles(
-        Path("mini.osm.pbf")
-    )
+    result = v3_module.read_v3_polygon_profiles(Path("mini.osm.pbf"))
 
-    assert profiles == [PolygonProfile.create("way/9", "Palais")]
-    assert named_count == 1
-    assert unnamed_count == 2
+    assert result.profiles == (PolygonProfile.create("way/9", "Palais"),)
+    assert result.named_count == 1
+    assert result.unnamed_count == 2
+    assert result.name_occurrences == (("palais", 1),)
     assert paths == ["mini.osm.pbf"]

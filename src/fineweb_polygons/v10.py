@@ -18,9 +18,6 @@ from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
 )
 from fineweb_polygons.artifact_io import (
-    decode_json_object_line as _decode_json_object_line,
-)
-from fineweb_polygons.artifact_io import (
     iter_json_objects as _iter_json_objects,
 )
 from fineweb_polygons.artifact_io import (
@@ -584,16 +581,6 @@ def _metadata_values(
 def _read_rows(input_path: Path) -> Iterator[_CandidateRow]:
     for line_number, decoded in _iter_json_objects(input_path, version="V9"):
         yield _decode_candidate_row(decoded, line_number)
-
-
-def _decode_input_line(line: str, line_number: int) -> _CandidateRow:
-    decoded = _decode_json_object_line(line, line_number, version="V9")
-    return _decode_candidate_row(decoded, line_number)
-
-
-def _decode_object(line: str, line_number: int) -> dict[str, Any]:
-    """Preserve the historical object decoder as a shared-boundary alias."""
-    return _decode_json_object_line(line, line_number, version="V9")
 
 
 def _decode_candidate_row(decoded: dict[str, Any], line_number: int) -> _CandidateRow:

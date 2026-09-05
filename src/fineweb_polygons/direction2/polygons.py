@@ -24,7 +24,7 @@ def _read_source(source: PolygonSource) -> tuple[PolygonRecord, ...]:
     factory = GeoJSONFactory()
     records: list[PolygonRecord] = []
     entities = osmium.FileProcessor(str(source.path)).with_areas()
-    for area in _as_entities(entities):
+    for area in cast(Iterator[Any], entities):
         if not area.is_area():
             continue
         records.append(_area_record(source, area, factory))
@@ -175,10 +175,6 @@ def _mean_point(points: Sequence[tuple[float, float]]) -> tuple[float, float] | 
         sum(point[0] for point in points) / len(points),
         sum(point[1] for point in points) / len(points),
     )
-
-
-def _as_entities(value: object) -> Iterator[Any]:
-    return cast(Iterator[Any], value)
 
 
 def _as_float(value: object) -> float:

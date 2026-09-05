@@ -23,8 +23,7 @@ test:
 docs:
     uv run mkdocs build --strict --site-dir "/Volumes/Seagate M3/projects/fineweb-polygons/site"
 
-crap:
-    uv run pytest
+crap: test
     uv run python scripts/check_crap.py --source src --coverage "/Volumes/Seagate M3/projects/fineweb-polygons/coverage.json" --max-crap 6
 
 mutation:

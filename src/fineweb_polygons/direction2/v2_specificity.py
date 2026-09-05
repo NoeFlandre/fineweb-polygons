@@ -227,15 +227,15 @@ def classify_name(
     else:
         decision = "distinctive"
         reason = "specific"
-    return _decision(
-        normalized_name,
-        decision,
-        reason,
-        polygon_count,
-        document_frequency,
-        token_count,
-        letter_count,
-        frequency_cutoff,
+    return NameDecision(
+        normalized_name=normalized_name,
+        decision=decision,
+        reason=reason,
+        polygon_count=polygon_count,
+        document_frequency=document_frequency,
+        token_count=token_count,
+        letter_count=letter_count,
+        frequency_cutoff=frequency_cutoff,
     )
 
 
@@ -307,25 +307,3 @@ def _validate_counts(
     ):
         if value < 0:
             raise ValueError(f"{name} must be non-negative")
-
-
-def _decision(
-    normalized_name: str,
-    decision: NameDecisionType,
-    reason: str,
-    polygon_count: int,
-    document_frequency: int,
-    token_count: int,
-    letter_count: int,
-    frequency_cutoff: int,
-) -> NameDecision:
-    return NameDecision(
-        normalized_name=normalized_name,
-        decision=decision,
-        reason=reason,
-        polygon_count=polygon_count,
-        document_frequency=document_frequency,
-        token_count=token_count,
-        letter_count=letter_count,
-        frequency_cutoff=frequency_cutoff,
-    )

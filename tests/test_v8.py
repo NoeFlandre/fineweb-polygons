@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import hashlib
-import io
 import json
-from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -222,16 +219,6 @@ def test_resolve_paths_reports_exact_duplicate_and_missing_paths(
     assert vocabulary_error.value.args == (missing_vocabulary.resolve(),)
 
 
-def test_decode_v7_line_rejects_empty_and_non_object_rows() -> None:
-    with pytest.raises(ValueError, match="V7 JSONL line 4 is empty"):
-        v8_module._decode_input_line("\n", 4)
-    with pytest.raises(ValueError, match="V7 JSONL line 5 must be an object"):
-        v8_module._decode_input_line("[]\n", 5)
-    with pytest.raises(ValueError) as text_error:
-        v8_module._decode_input_line('{"text": 3}\n', 6)
-    assert str(text_error.value) == ("V7 JSONL line 6 must contain a string text field")
-
-
 def test_v8_text_row_decoder_preserves_text_and_error_contracts() -> None:
     row = {"text": "Héllo"}
 
@@ -242,13 +229,23 @@ def test_v8_text_row_decoder_preserves_text_and_error_contracts() -> None:
     assert str(error.value) == ("V7 JSONL line 4 must contain a string text field")
 
 
-def test_v8_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("", "is empty"),
+        ("[]", "must be an object"),
+        ('{"text": 3}', "must contain a string text field"),
+    ],
+)
+def test_v8_read_rows_preserves_invalid_row_line_numbers(
+    tmp_path: Path, line: str, message: str
+) -> None:
     path = tmp_path / "rows.jsonl"
-    path.write_text('{"text": "ok"}\n{"text": 3}\n', encoding="utf-8")
+    path.write_text('{"text": "ok"}\n' + line + "\n", encoding="utf-8")
 
     with pytest.raises(ValueError) as error:
         list(v8_module._read_rows(path))
-    assert str(error.value) == "V7 JSONL line 2 must contain a string text field"
+    assert str(error.value) == f"V7 JSONL line 2 {message}"
 
 
 def test_category_counts_include_each_matching_category_once(tmp_path: Path) -> None:
@@ -367,31 +364,6 @@ def test_write_output_uses_utf8_newline_and_counts_multiple_rows(
     assert captured == [{"encoding": "utf-8", "newline": "\n"}]
 
 
-def test_write_kept_row_uses_stable_json_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, object] = {}
-    real_dumps = json.dumps
-
-    def recording_dumps(value: object, **kwargs: Any) -> str:
-        captured.update(kwargs)
-        return real_dumps(value, **kwargs)
-
-    monkeypatch.setattr(v8_module.json, "dumps", recording_dumps)
-    output = io.StringIO()
-
-    v8_module._write_kept_row(output, {"é": "value", "a": 1})
-
-    assert captured == {"ensure_ascii": False, "sort_keys": True}
-    assert output.getvalue() == '{"a": 1, "é": "value"}\n'
-
-
-def test_add_category_documents_counts_repeated_categories() -> None:
-    counts: Counter[str] = Counter()
-
-    v8_module._add_category_documents(counts, ("land_use", "land_use"))
-
-    assert counts == {"land_use": 2}
-
-
 def test_matching_categories_preserves_first_match_order() -> None:
     class Category(str):
         def __hash__(self) -> int:
@@ -460,86 +432,6 @@ def test_manifest_matches_rejects_non_mapping_sections(tmp_path: Path) -> None:
         )
 
 
-def test_read_manifest_requires_utf8_and_rejects_invalid_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    missing = tmp_path / "missing.json"
-    assert v8_module._read_manifest(missing) is None
-
-    invalid = tmp_path / "invalid.json"
-    invalid.write_text("not json", encoding="utf-8")
-    assert v8_module._read_manifest(invalid) is None
-
-    not_object = tmp_path / "list.json"
-    not_object.write_text("[]", encoding="utf-8")
-    assert v8_module._read_manifest(not_object) is None
-
-    captured: dict[str, object] = {}
-
-    def fake_read_text(self: Path, *, encoding: str | None = None) -> str:
-        captured["encoding"] = encoding
-        return '{"status": "complete"}'
-
-    monkeypatch.setattr(Path, "read_text", fake_read_text)
-    assert v8_module._read_manifest(tmp_path / "manifest.json") == {
-        "status": "complete"
-    }
-    assert captured == {"encoding": "utf-8"}
-
-
-def test_temporary_path_uses_local_stable_prefix_and_suffix(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    real_mkstemp = artifact_io.tempfile.mkstemp
-    captured: dict[str, object] = {}
-
-    def recording_mkstemp(**kwargs: Any):
-        captured.update(kwargs)
-        return real_mkstemp(**kwargs)
-
-    monkeypatch.setattr(artifact_io.tempfile, "mkstemp", recording_mkstemp)
-
-    temporary = artifact_io.temporary_path(tmp_path / "result.json")
-
-    assert temporary.parent == tmp_path
-    assert captured == {
-        "dir": tmp_path,
-        "prefix": ".result.json.",
-        "suffix": ".tmp",
-    }
-
-
-def test_atomic_json_write_uses_stable_json_and_utf8_flags(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured_dumps: dict[str, object] = {}
-    captured_write: dict[str, object] = {}
-    real_dumps = json.dumps
-    real_write_text = Path.write_text
-
-    def recording_dumps(value: object, **kwargs: Any) -> str:
-        captured_dumps.update(kwargs)
-        return real_dumps(value, **kwargs)
-
-    def recording_write_text(self: Path, data: str, **kwargs: Any) -> int:
-        captured_write.update(kwargs)
-        return real_write_text(self, data, **kwargs)
-
-    monkeypatch.setattr(v8_module.json, "dumps", recording_dumps)
-    monkeypatch.setattr(Path, "write_text", recording_write_text)
-
-    output = tmp_path / "manifest.json"
-    v8_module._atomic_json_write(output, {"é": {"b": 1, "a": 2}})
-
-    assert captured_dumps == {
-        "ensure_ascii": False,
-        "indent": 2,
-        "sort_keys": True,
-    }
-    assert captured_write == {"encoding": "utf-8"}
-    assert output.read_text(encoding="utf-8").startswith('{\n  "é"')
-
-
 def test_atomic_writes_clean_up_a_missing_temporary_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -572,32 +464,3 @@ def test_write_output_cleans_up_a_missing_temporary_file(
             output_path=config.output_path,
             vocabulary=load_vocabulary(config.vocabulary_path),
         )
-
-
-def test_sha256_reads_fixed_chunks_and_stops_at_empty_bytes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    sizes: list[object] = []
-
-    class RecordingReader:
-        def __init__(self) -> None:
-            self.chunks = iter((b"abc", b"XXXX", b""))
-
-        def __enter__(self) -> RecordingReader:
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-        def read(self, size: object) -> bytes:
-            sizes.append(size)
-            return next(self.chunks)
-
-    def fake_open(self: Path, *args: object, **kwargs: object) -> RecordingReader:
-        return RecordingReader()
-
-    monkeypatch.setattr(Path, "open", fake_open)
-
-    expected = hashlib.sha256(b"abcXXXX").hexdigest()
-    assert v8_module._sha256_file(tmp_path / "ignored") == expected
-    assert sizes == [1024 * 1024, 1024 * 1024, 1024 * 1024]

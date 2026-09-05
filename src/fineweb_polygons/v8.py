@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json  # noqa: F401 - preserve the historical module-level patch point
 from collections import Counter
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -14,9 +13,6 @@ from fineweb_polygons.artifact_io import (
 )
 from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
-)
-from fineweb_polygons.artifact_io import (
-    decode_json_object_line as _decode_json_object_line,
 )
 from fineweb_polygons.artifact_io import (
     iter_json_objects as _iter_json_objects,
@@ -168,7 +164,7 @@ def _write_output(
                 continue
             _write_kept_row(output, row)
             rows_kept += 1
-            _add_category_documents(category_documents, categories)
+            category_documents.update(categories)
     return rows_processed, rows_kept, dict(sorted(category_documents.items()))
 
 
@@ -177,19 +173,9 @@ def _matching_categories(vocabulary: TopicVocabulary, text: str) -> tuple[str, .
     return tuple(dict.fromkeys(match.category for match in matches))
 
 
-def _add_category_documents(counts: Counter[str], categories: tuple[str, ...]) -> None:
-    for category in categories:
-        counts[category] += 1
-
-
 def _read_rows(input_path: Path) -> Iterator[tuple[dict[str, Any], str]]:
     for line_number, decoded in _iter_json_objects(input_path, version="V7"):
         yield _decode_text_row(decoded, line_number)
-
-
-def _decode_input_line(line: str, line_number: int) -> tuple[dict[str, Any], str]:
-    decoded = _decode_json_object_line(line, line_number, version="V7")
-    return _decode_text_row(decoded, line_number)
 
 
 def _decode_text_row(

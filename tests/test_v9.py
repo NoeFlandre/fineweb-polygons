@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from collections import Counter
 from copy import deepcopy
-from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -618,25 +617,6 @@ def test_v9_decode_sentences_reports_invalid_sentence_lists() -> None:
     )
 
 
-def test_v9_decode_input_line_preserves_line_numbers_in_all_errors() -> None:
-    with pytest.raises(ValueError) as object_error:
-        v9_module._decode_input_line("[]", 7)
-    assert str(object_error.value) == "V8 JSONL line 7 must be an object"
-
-    with pytest.raises(ValueError) as text_error:
-        v9_module._decode_input_line('{"text": 1, "sentences": []}', 8)
-    assert str(text_error.value) == ("V8 JSONL line 8 must contain a string text field")
-
-    with pytest.raises(ValueError) as sentences_error:
-        v9_module._decode_input_line(
-            '{"text": "hello", "sentences": null}',
-            9,
-        )
-    assert str(sentences_error.value) == (
-        "V8 JSONL line 9 must contain a list of string sentences"
-    )
-
-
 def test_v9_candidate_decoder_preserves_fields_and_error_contracts() -> None:
     row = {"text": "A sentence.", "sentences": ["A sentence."]}
 
@@ -653,78 +633,29 @@ def test_v9_candidate_decoder_preserves_fields_and_error_contracts() -> None:
     )
 
 
-def test_v9_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("[]", "must be an object"),
+        ('{"text": 1, "sentences": []}', "must contain a string text field"),
+        (
+            '{"text": "hello", "sentences": null}',
+            "must contain a list of string sentences",
+        ),
+    ],
+)
+def test_v9_read_rows_preserves_invalid_row_line_numbers(
+    tmp_path: Path, line: str, message: str
+) -> None:
     path = tmp_path / "rows.jsonl"
     path.write_text(
-        '{"text": "A.", "sentences": ["A."]}\n{"text": 1, "sentences": []}\n',
+        '{"text": "A.", "sentences": ["A."]}\n' + line + "\n",
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError) as error:
         list(v9_module._read_rows(path))
-    assert str(error.value) == "V8 JSONL line 2 must contain a string text field"
-
-
-def test_v9_legacy_object_decoder_and_text_opener_remain_compatible(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    row = {"text": "Héllo"}
-    assert v9_module._decode_object(json.dumps(row), 3) == row
-
-    with pytest.raises(ValueError) as error:
-        v9_module._decode_object("[]", 4)
-    assert str(error.value) == "V8 JSONL line 4 must be an object"
-
-    path = tmp_path / "input.jsonl"
-    path.write_text("Héllo\n", encoding="utf-8")
-    real_open: Any = Path.open
-    encodings: list[object] = []
-
-    def recording_open(self: Path, *args: object, **kwargs: object):
-        if self == path:
-            encodings.append(kwargs.get("encoding"))
-        return real_open(self, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "open", recording_open)
-    with v9_module._open_text_input(path) as source:
-        assert source.read() == "Héllo\n"
-    assert encodings == ["utf-8"]
-
-
-def test_v9_writes_kept_rows_with_sorted_json_keys() -> None:
-    output = StringIO()
-
-    v9_module._write_kept_row(output, {"z": 1, "a": 2})
-
-    assert output.getvalue() == '{"a": 2, "z": 1}\n'
-
-
-def test_v9_writes_kept_rows_with_unicode_without_ascii_escaping(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[dict[str, object]] = []
-
-    def fake_dumps(value: object, **kwargs: object) -> str:
-        calls.append(kwargs)
-        return "payload"
-
-    monkeypatch.setattr(v9_module.json, "dumps", fake_dumps)
-    output = StringIO()
-
-    v9_module._write_kept_row(output, {"text": "é"})
-
-    assert output.getvalue() == "payload\n"
-    assert calls == [{"ensure_ascii": False, "sort_keys": True}]
-
-
-def test_v9_atomic_json_output_is_stable_and_human_readable(tmp_path: Path) -> None:
-    path = tmp_path / "manifest.json"
-
-    v9_module._atomic_json_write(path, {"z": "é", "a": {"b": 1}})
-
-    assert path.read_text(encoding="utf-8") == (
-        '{\n  "a": {\n    "b": 1\n  },\n  "z": "é"\n}\n'
-    )
+    assert str(error.value) == f"V8 JSONL line 2 {message}"
 
 
 def test_v9_output_declares_explicit_unix_newlines(
@@ -744,15 +675,3 @@ def test_v9_output_declares_explicit_unix_newlines(
     run_v9(config)
 
     assert newlines == ["\n"]
-
-
-def test_v9_temporary_paths_are_hidden_sibling_tmp_files(tmp_path: Path) -> None:
-    target = tmp_path / "artifacts" / "result.jsonl"
-    target.parent.mkdir()
-
-    temporary = artifact_io.temporary_path(target)
-
-    assert temporary.parent == target.parent
-    assert temporary.name.startswith(f".{target.name}.")
-    assert temporary.name.endswith(".tmp")
-    assert not temporary.exists()

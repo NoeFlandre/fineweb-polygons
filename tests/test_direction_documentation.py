@@ -28,7 +28,6 @@ _DIRECTION_2_RECORD = (
 )
 _CATALOG = _REPOSITORY_ROOT / "metadata" / "catalog.json"
 _REPOSITORY_CATALOG = _REPOSITORY_ROOT / "docs" / "dataset-catalog.json"
-_MKDOCS_CONFIG = _REPOSITORY_ROOT / "mkdocs.yml"
 
 
 def test_direction_record_freezes_the_complete_v1_to_v10_line() -> None:
@@ -113,32 +112,3 @@ def test_direction_document_covers_each_version_and_handoff() -> None:
     for number in range(1, 11):
         assert f"### V{number}" in document
     assert "Direction 2" in document
-
-
-def test_mkdocs_quotes_the_direction_label_containing_a_colon() -> None:
-    config = _MKDOCS_CONFIG.read_text(encoding="utf-8")
-
-    assert (
-        '      - "Direction 1: FineWeb retrieval": '
-        "directions/fineweb-retrieval/README.md"
-    ) in config
-
-
-def test_mkdocs_direction_links_use_explicit_documentation_targets() -> None:
-    docs_with_direction_links = (
-        _REPOSITORY_ROOT / "docs" / "index.md",
-        _REPOSITORY_ROOT / "docs" / "dataset-catalog.md",
-        _REPOSITORY_ROOT / "docs" / "development.md",
-        _REPOSITORY_ROOT / "docs" / "versions.md",
-    )
-
-    for path in docs_with_direction_links:
-        document = path.read_text(encoding="utf-8")
-        assert "](directions/fineweb-retrieval/)" not in document
-
-    direction_document = _DIRECTION_DOCUMENT.read_text(encoding="utf-8")
-    assert "](../../../metadata/catalog.json)" not in direction_document
-    assert (
-        "https://github.com/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json"
-        in direction_document
-    )

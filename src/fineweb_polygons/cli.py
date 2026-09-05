@@ -258,7 +258,7 @@ def _run_direction2(parsed: argparse.Namespace, runner: Direction2Runner) -> int
         parsed.data_root,
         config_factory=lambda paths: _direction2_config(parsed, paths),
         runner=runner,
-        summary_record=_direction2_summary_record,
+        summary_record=lambda summary: summary.to_record(),
     )
 
 
@@ -270,7 +270,7 @@ def _run_direction2_v2(
         parsed.data_root,
         config_factory=lambda paths: _direction2_v2_config(parsed, paths),
         runner=runner,
-        summary_record=_direction2_v2_summary_record,
+        summary_record=lambda summary: summary.to_record(),
     )
 
 
@@ -454,15 +454,3 @@ def _v10_summary_record(summary: V10RunSummary) -> dict[str, object]:
         "rows_processed": summary.rows_processed,
         "yes_sentences_written": summary.yes_sentences_written,
     }
-
-
-def _direction2_summary_record(
-    summary: Direction2RunSummary,
-) -> dict[str, object]:
-    return summary.to_record()
-
-
-def _direction2_v2_summary_record(
-    summary: Direction2V2RunSummary,
-) -> dict[str, object]:
-    return summary.to_record()

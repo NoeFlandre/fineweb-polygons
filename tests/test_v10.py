@@ -655,25 +655,7 @@ def test_v10_checkpoint_open_rejects_a_mismatched_header(tmp_path: Path) -> None
     assert str(error.value) == "V10 checkpoint does not match the current run"
 
 
-def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
-    cases = [
-        ("", "is empty"),
-        ("[]", "must be an object"),
-        (json.dumps({"sentences_with_topic_term": "sentence"}), "candidate sentences"),
-        (
-            json.dumps(
-                {
-                    "sentences_with_topic_term": ["sentence"],
-                    "relevant_sentence_metadata": [],
-                }
-            ),
-            "metadata must align",
-        ),
-    ]
-    for line, message in cases:
-        with pytest.raises(ValueError, match=message):
-            v10_module._decode_input_line(line, 4)
-
+def test_v10_metadata_validation_rejects_bad_input() -> None:
     with pytest.raises(ValueError, match="topic_terms"):
         v10_module._metadata_values([{"topic_terms": "park"}], "topic_terms")
     assert v10_module._metadata_values([{"topic_terms": ["park"]}], "missing") == ()
@@ -681,16 +663,6 @@ def test_v10_decode_and_metadata_validation_reject_bad_input() -> None:
         [{}, {"topic_terms": ["park"]}], "topic_terms"
     ) == ("park",)
 
-    with pytest.raises(ValueError) as error:
-        v10_module._decode_input_line("[]", 4)
-    assert str(error.value) == "V9 JSONL line 4 must be an object"
-    with pytest.raises(ValueError) as error:
-        v10_module._decode_input_line(
-            json.dumps({"sentences_with_topic_term": "sentence"}), 4
-        )
-    assert str(error.value) == (
-        "V9 JSONL line 4 must contain a list of candidate sentences"
-    )
     assert v10_module._is_mapping_list({}) is False
 
     with pytest.raises(ValueError) as error:
@@ -733,26 +705,36 @@ def test_v10_candidate_decoder_preserves_fields_and_error_contracts() -> None:
     )
 
 
-def test_v10_read_rows_preserves_invalid_row_line_numbers(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("", "is empty"),
+        ("[]", "must be an object"),
+        (
+            '{"sentences_with_topic_term": "sentence"}',
+            "must contain a list of candidate sentences",
+        ),
+        (
+            '{"sentences_with_topic_term": ["sentence"], '
+            '"relevant_sentence_metadata": []}',
+            "metadata must align with candidate sentences",
+        ),
+    ],
+)
+def test_v10_read_rows_preserves_invalid_row_line_numbers(
+    tmp_path: Path, line: str, message: str
+) -> None:
     path = tmp_path / "rows.jsonl"
     path.write_text(
-        '{"sentences_with_topic_term": [], "relevant_sentence_metadata": []}\n[]\n',
+        '{"sentences_with_topic_term": [], "relevant_sentence_metadata": []}\n'
+        + line
+        + "\n",
         encoding="utf-8",
     )
 
     with pytest.raises(ValueError) as error:
         list(v10_module._read_rows(path))
-    assert str(error.value) == "V9 JSONL line 2 must be an object"
-
-
-def test_v10_legacy_object_decoder_remains_compatible() -> None:
-    row = {"sentences_with_topic_term": [], "relevant_sentence_metadata": []}
-
-    assert v10_module._decode_object(json.dumps(row), 3) == row
-
-    with pytest.raises(ValueError) as error:
-        v10_module._decode_object("[]", 4)
-    assert str(error.value) == "V9 JSONL line 4 must be an object"
+    assert str(error.value) == f"V9 JSONL line 2 {message}"
 
 
 def test_v10_classification_rejects_a_label_count_mismatch() -> None:

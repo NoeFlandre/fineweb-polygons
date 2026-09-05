@@ -100,7 +100,8 @@ def run_direction2_v2(config: Direction2V2RunConfig) -> Direction2V2RunSummary:
     output_paths = tuple(
         config.output_dir / f"{source.key}.parquet" for source in sources
     )
-    with _LogFile(config.log_path) as log:
+    config.log_path.parent.mkdir(parents=True, exist_ok=True)
+    with config.log_path.open("w", encoding="utf-8") as log:
         _log_event(log, "run_started", version=DIRECTION_V2_VERSION)
         polygons = read_polygon_records(
             tuple(PolygonSource(source.key, source.path) for source in sources)
@@ -725,23 +726,6 @@ def _write_card(path: Path, manifest: Mapping[str, object]) -> None:
         temporary_factory=deterministic_temporary_path,
     ) as output:
         output.write(render_dataset_card(manifest))
-
-
-class _LogFile(AbstractContextManager[Any]):
-    """Manage one UTF-8 JSONL log stream and its parent directory."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._stream: Any = None
-
-    def __enter__(self) -> Any:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._stream = self._path.open("w", encoding="utf-8")
-        return self._stream
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        if self._stream is not None:
-            self._stream.close()
 
 
 def _log_event(stream: Any, event: str, **values: object) -> None:

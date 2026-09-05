@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json  # noqa: F401 - preserve the historical module-level patch point
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, TypeGuard, cast
@@ -12,9 +11,6 @@ from fineweb_polygons.artifact_io import (
 )
 from fineweb_polygons.artifact_io import (
     atomic_text_output as _atomic_text_output,
-)
-from fineweb_polygons.artifact_io import (
-    decode_json_object_line as _decode_json_object_line,
 )
 from fineweb_polygons.artifact_io import (
     iter_json_objects as _iter_json_objects,
@@ -377,29 +373,12 @@ def _read_rows(
         yield _decode_candidate_row(decoded, line_number)
 
 
-def _open_text_input(path: Path) -> Any:
-    """Preserve the historical UTF-8 input opener for compatible callers."""
-    return path.open(encoding="utf-8")
-
-
-def _decode_input_line(
-    line: str, line_number: int
-) -> tuple[dict[str, Any], tuple[str, ...]]:
-    decoded = _decode_json_object_line(line, line_number, version="V8")
-    return _decode_candidate_row(decoded, line_number)
-
-
 def _decode_candidate_row(
     decoded: dict[str, Any], line_number: int
 ) -> tuple[dict[str, Any], tuple[str, ...]]:
     text = _decode_text(decoded, line_number)
     sentences = _decode_sentences(decoded, text, line_number)
     return decoded, sentences
-
-
-def _decode_object(line: str, line_number: int) -> dict[str, Any]:
-    """Preserve the historical object decoder as a shared-boundary alias."""
-    return _decode_json_object_line(line, line_number, version="V8")
 
 
 def _decode_text(decoded: Mapping[str, Any], line_number: int) -> str:

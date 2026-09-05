@@ -6,11 +6,9 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
 
 import pytest
 
-import fineweb_polygons.artifact_io as artifact_io
 import fineweb_polygons.v7 as v7_module
 from fineweb_polygons.v7 import V7RunConfig, run_v7
 
@@ -271,20 +269,6 @@ def test_run_v7_rejects_invalid_jsonl_rows(
     assert not config.manifest_path.exists()
 
 
-def test_v7_compatibility_decoder_preserves_text_and_error_contracts() -> None:
-    row = {"text": "Héllo"}
-
-    assert v7_module._decode_input_line(json.dumps(row), 3) == (row, "Héllo")
-
-    with pytest.raises(ValueError) as text_error:
-        v7_module._decode_input_line('{"text": 3}', 4)
-    assert str(text_error.value) == ("V6 JSONL line 4 must contain a string text field")
-
-    with pytest.raises(ValueError) as object_error:
-        v7_module._decode_input_line("[]", 5)
-    assert str(object_error.value) == "V6 JSONL line 5 must be an object"
-
-
 def test_run_v7_rejects_a_sentence_batch_count_mismatch(tmp_path: Path) -> None:
     config = _config(tmp_path)
     _write_v6_input(config.input_path)
@@ -384,28 +368,18 @@ def test_write_batch_requires_strict_text_and_sentence_alignment() -> None:
         )
 
 
-def test_write_batch_uses_unicode_and_sorted_json(monkeypatch) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_dumps(value: object, **kwargs: object) -> str:
-        captured["value"] = value
-        captured["kwargs"] = kwargs
-        return "serialized"
-
+def test_write_batch_uses_unicode_and_sorted_json() -> None:
     class FixedSegmenter:
         def split_many(self, texts: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
             return (("Héllo.",),)
 
-    monkeypatch.setattr(v7_module.json, "dumps", fake_dumps)
     output = io.StringIO()
     rows = [{"z": 1, "text": "Héllo."}]
 
     assert v7_module._write_batch(output, rows, ("Héllo.",), FixedSegmenter()) == (1, 1)
-    assert captured == {
-        "value": {"text": "Héllo.", "z": 1, "sentences": ["Héllo."]},
-        "kwargs": {"ensure_ascii": False, "sort_keys": True},
-    }
-    assert output.getvalue() == "serialized\n"
+    assert output.getvalue() == (
+        '{"sentences": ["Héllo."], "text": "Héllo.", "z": 1}\n'
+    )
 
 
 def test_write_output_creates_nested_directories_and_uses_utf8_newlines(
@@ -515,18 +489,6 @@ def test_write_output_cleans_missing_temporary_file_after_failure(
     assert not output_path.exists()
 
 
-def test_temporary_path_stays_next_to_target_and_is_removed(tmp_path: Path) -> None:
-    target = tmp_path / "nested" / "v7.jsonl"
-    target.parent.mkdir()
-
-    temporary = artifact_io.temporary_path(target)
-
-    assert temporary.parent == target.parent
-    assert temporary.name.startswith(f".{target.name}.")
-    assert temporary.name.endswith(".tmp")
-    assert not temporary.exists()
-
-
 def test_segmentation_record_includes_segmenter_configuration(tmp_path: Path) -> None:
     class ConfiguredSegmenter:
         def split_many(self, texts: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
@@ -547,115 +509,9 @@ def test_segmentation_record_includes_segmenter_configuration(tmp_path: Path) ->
     assert record["providers"] == ["CPUExecutionProvider"]
 
 
-def test_read_manifest_requests_utf8(monkeypatch) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_read_text(path: Path, **kwargs: object) -> str:
-        captured.update(kwargs)
-        return "{}"
-
-    monkeypatch.setattr(Path, "read_text", fake_read_text)
-
-    assert v7_module._read_manifest(Path("manifest.json")) == {}
-    assert captured == {"encoding": "utf-8"}
-
-
 def test_matching_segmentation_settings_rejects_non_mapping_records(
     tmp_path: Path,
 ) -> None:
     assert not v7_module._matching_segmentation_settings(
         {"segmentation": None}, _config(tmp_path)
     )
-
-
-def test_atomic_json_write_uses_stable_json_and_cleans_temp_file(
-    tmp_path: Path, monkeypatch
-) -> None:
-    captured: dict[str, object] = {}
-    write_kwargs: dict[str, object] = {}
-
-    def fake_dumps(value: object, **kwargs: object) -> str:
-        captured["value"] = value
-        captured["kwargs"] = kwargs
-        return "payload"
-
-    original_write_text = Path.write_text
-
-    def recording_write_text(path: Path, data: str, **kwargs: str | None) -> int:
-        write_kwargs.update(kwargs)
-        return original_write_text(path, data, **kwargs)
-
-    monkeypatch.setattr(v7_module.json, "dumps", fake_dumps)
-    monkeypatch.setattr(Path, "write_text", recording_write_text)
-    path = tmp_path / "manifest.json"
-
-    v7_module._atomic_json_write(path, {"z": 1, "é": 2})
-
-    assert captured == {
-        "value": {"z": 1, "é": 2},
-        "kwargs": {"ensure_ascii": False, "indent": 2, "sort_keys": True},
-    }
-    assert write_kwargs == {"encoding": "utf-8"}
-    assert path.read_text(encoding="utf-8") == "payload\n"
-
-
-def test_atomic_json_write_removes_temporary_file_on_replace_failure(
-    tmp_path: Path, monkeypatch
-) -> None:
-    unlink_calls: list[bool] = []
-    original_unlink = Path.unlink
-
-    def recording_unlink(path: Path, *, missing_ok: bool = False) -> None:
-        unlink_calls.append(missing_ok)
-        original_unlink(path, missing_ok=missing_ok)
-
-    def fail_replace(source: Path, target: Path) -> None:
-        raise OSError("replace failed")
-
-    monkeypatch.setattr(Path, "unlink", recording_unlink)
-    monkeypatch.setattr(artifact_io.os, "replace", fail_replace)
-
-    with pytest.raises(OSError, match="replace failed"):
-        v7_module._atomic_json_write(tmp_path / "manifest.json", {"ok": True})
-
-    assert unlink_calls[-1] is True
-
-
-def test_sha256_file_uses_megabyte_chunks_and_stops_on_empty_read(
-    tmp_path: Path,
-) -> None:
-    expected_chunk_size = 1024 * 1024
-
-    class Source:
-        def __init__(self) -> None:
-            self.read_sizes: list[int] = []
-
-        def __enter__(self) -> Source:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def read(self, size: int) -> bytes:
-            self.read_sizes.append(size)
-            if size != expected_chunk_size:
-                return b""
-            if len(self.read_sizes) == 1:
-                return b"payload"
-            if len(self.read_sizes) == 2:
-                return b""
-            raise AssertionError("the empty read should stop iteration")
-
-    source = Source()
-
-    class FakePath:
-        def open(self, mode: str) -> Source:
-            assert mode == "rb"
-            return source
-
-    digest = v7_module._sha256_file(cast(Path, FakePath()))
-
-    import hashlib
-
-    assert digest == hashlib.sha256(b"payload").hexdigest()
-    assert source.read_sizes == [expected_chunk_size, expected_chunk_size]

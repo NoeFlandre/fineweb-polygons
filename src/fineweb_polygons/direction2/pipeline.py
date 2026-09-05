@@ -52,7 +52,7 @@ def run_direction2(config: Direction2RunConfig) -> Direction2RunSummary:
         config.output_dir / f"{source.key}.parquet" for source in sources
     )
     config.log_path.parent.mkdir(parents=True, exist_ok=True)
-    with _log_file(config.log_path) as log:
+    with config.log_path.open("w", encoding="utf-8") as log:
         _log_event(log, "run_started", version=DIRECTION_VERSION)
         polygons = read_polygon_records(sources)
         matcher = AhoCorasickPolygonMatcher.build(polygons)
@@ -84,7 +84,6 @@ def run_direction2(config: Direction2RunConfig) -> Direction2RunSummary:
         manifest = _manifest(
             config=config,
             sources=sources,
-            output_paths=output_paths,
             polygons=polygons,
             names_indexed=matcher.names_indexed,
             scan=scan,
@@ -107,24 +106,6 @@ def _validate_inputs(config: Direction2RunConfig) -> None:
     for path in (config.monaco_pbf, config.liechtenstein_pbf, config.shard_path):
         if not path.is_file():
             raise FileNotFoundError(path)
-
-
-class _LogFile(AbstractContextManager[Any]):
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._stream: Any = None
-
-    def __enter__(self) -> Any:
-        self._stream = self._path.open("w", encoding="utf-8")
-        return self._stream
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        if self._stream is not None:
-            self._stream.close()
-
-
-def _log_file(path: Path) -> _LogFile:
-    return _LogFile(path)
 
 
 def _log_event(stream: Any, event: str, **values: object) -> None:
@@ -350,7 +331,6 @@ def _manifest(
     *,
     config: Direction2RunConfig,
     sources: tuple[PolygonSource, ...],
-    output_paths: tuple[Path, ...],
     polygons: tuple[PolygonRecord, ...],
     names_indexed: int,
     scan: _ScanResult,

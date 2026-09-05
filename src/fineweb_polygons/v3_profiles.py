@@ -37,15 +37,6 @@ def read_v3_polygon_profiles(pbf_path: Path) -> PolygonReadResult:
     )
 
 
-def _read_area_profiles(
-    pbf_path: Path,
-) -> tuple[list[PolygonProfile], int, int]:
-    profiles, named_count, unnamed_count, _ = _read_area_profiles_with_occurrences(
-        pbf_path
-    )
-    return profiles, named_count, unnamed_count
-
-
 def _read_area_profiles_with_occurrences(
     pbf_path: Path,
 ) -> tuple[list[PolygonProfile], int, int, Counter[str]]:
