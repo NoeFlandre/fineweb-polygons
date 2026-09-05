@@ -676,10 +676,32 @@ def test_country_evidence_treats_touching_spans_as_independent() -> None:
     )
 
 
-def test_run_direction2_v2_counts_and_gates_specificity(tmp_path: Path) -> None:
+def test_run_direction2_v2_counts_and_gates_specificity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config, _ = _make_v2_fixture(tmp_path)
+    config = replace(config, log_path=tmp_path / "logs" / "résultats.jsonl")
+    original_open = Path.open
+
+    def open_with_ascii_locale(self: Path, *args: Any, **kwargs: Any) -> Any:
+        if self == config.log_path:
+            kwargs["encoding"] = kwargs.get("encoding") or "ascii"
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_with_ascii_locale)
     summary = run_direction2_v2(config)
 
+    assert summary.output_paths == (
+        config.output_dir / "monaco.parquet",
+        config.output_dir / "liechtenstein.parquet",
+    )
+    assert summary.manifest_path == config.manifest_path
+    assert summary.dataset_card_path == config.dataset_card_path
+    assert summary.log_path == config.log_path
+    assert summary.name_inventory_path == config.name_inventory_path
+    assert summary.polygons_read == 6
+    assert summary.names_considered == 6
+    assert summary.names_indexed == 4
     assert summary.direction == DIRECTION_V2_VERSION
     assert summary.fineweb_docs_frequency_pass == 4
     assert summary.fineweb_docs_match_pass == 4
@@ -1349,11 +1371,12 @@ def test_run_direction2_v2_closes_nested_log_after_polygon_read_failure(
     monkeypatch.setattr(Path, "open", recording_open)
     monkeypatch.setattr(v2_pipeline, "read_polygon_records", fail_read)
 
-    with pytest.raises(OSError, match="polygon read failed"):
-        run_direction2_v2(config)
+    for _ in range(2):
+        with pytest.raises(OSError, match="polygon read failed"):
+            run_direction2_v2(config)
 
-    assert len(streams) == 1
-    assert streams[0].closed
+    assert len(streams) == 2
+    assert all(stream.closed for stream in streams)
     assert json.loads(path.read_text(encoding="utf-8")) == {
         "event": "run_started",
         "version": DIRECTION_V2_VERSION,

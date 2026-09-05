@@ -129,6 +129,19 @@ def test_read_json_object_returns_only_valid_json_objects(tmp_path: Path) -> Non
     assert artifact_io.read_json_object(valid) == {"status": "complete"}
 
 
+def test_read_json_object_decodes_utf8_when_locale_differs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = '{"name": "évidence"}'.encode()
+
+    def read_text(self: Path, *, encoding: str | None = None) -> str:
+        return payload.decode(encoding or "ascii")
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+
+    assert artifact_io.read_json_object(Path("manifest.json")) == {"name": "évidence"}
+
+
 def test_decode_json_object_line_reports_versioned_errors() -> None:
     with pytest.raises(ValueError) as empty_error:
         artifact_io.decode_json_object_line("\n", 7, version="V7")
