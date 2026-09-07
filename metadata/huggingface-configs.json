@@ -1,0 +1,142 @@
+[
+  {
+    "config_name": "v1",
+    "data_files": [
+      {
+        "split": "train",
+        "path": "data/direction-1-retrieval/v1/monaco.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v2",
+    "data_files": [
+      {
+        "split": "train",
+        "path": "data/direction-1-retrieval/v2/monaco.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v3",
+    "data_files": [
+      {
+        "split": "train",
+        "path": "data/direction-1-retrieval/v3/monaco.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v4",
+    "data_files": [
+      {
+        "split": "train",
+        "path": "data/direction-1-retrieval/v4/monaco.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v5",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v5/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v5/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v6",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v6/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v6/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v7",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v7/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v7/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v8",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v8/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v8/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v9",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v9/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v9/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "v10",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-1-retrieval/v10/monaco.jsonl"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-1-retrieval/v10/liechtenstein.jsonl"
+      }
+    ]
+  },
+  {
+    "config_name": "direction_2_lexical_v1",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-2-lexical/v1/monaco.parquet"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-2-lexical/v1/liechtenstein.parquet"
+      }
+    ]
+  },
+  {
+    "config_name": "direction_2_lexical_v2",
+    "data_files": [
+      {
+        "split": "monaco",
+        "path": "data/direction-2-lexical/v2/monaco.parquet"
+      },
+      {
+        "split": "liechtenstein",
+        "path": "data/direction-2-lexical/v2/liechtenstein.parquet"
+      }
+    ]
+  }
+]

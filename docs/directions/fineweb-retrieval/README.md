@@ -120,7 +120,7 @@ First-shard result: Monaco had 21 documents and 62 `yes` sentences;
 Liechtenstein had 3 documents and 4 `yes` sentences.
 
 The full contracts, manifests, exact prompt, schemas, and reproducibility
-commands are in the [version guide](../../versions.md), [dataset catalog](../../dataset-catalog.md),
+commands are in the [version guide](versions.md), [dataset catalog](../../dataset-catalog.md),
 and [development guide](../../development.md). The public HF files and
 manifests are listed in the [machine-readable catalog](https://github.com/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json).
 

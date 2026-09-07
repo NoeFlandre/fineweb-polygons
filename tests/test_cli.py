@@ -6,17 +6,19 @@ from pathlib import Path
 import pytest
 
 import fineweb_polygons.cli as cli_module
+from fineweb_polygons import registry
 from fineweb_polygons.cli import _build_parser, main
-from fineweb_polygons.direction2.models import (
+from fineweb_polygons.core.foundation import DEFAULT_DATA_ROOT
+from fineweb_polygons.directions import retrieval
+from fineweb_polygons.directions.lexical.v1.models import (
     Direction2RunSummary,
 )
-from fineweb_polygons.direction2.v2_models import Direction2V2RunSummary
-from fineweb_polygons.foundation import DEFAULT_DATA_ROOT
-from fineweb_polygons.runs import RunSummary
-from fineweb_polygons.v7 import V7RunSummary
-from fineweb_polygons.v8 import V8RunSummary
-from fineweb_polygons.v9 import V9RunSummary
-from fineweb_polygons.v10 import V10RunSummary
+from fineweb_polygons.directions.lexical.v2.models import Direction2V2RunSummary
+from fineweb_polygons.directions.retrieval.runs import RunSummary
+from fineweb_polygons.directions.retrieval.stages.v7 import V7RunSummary
+from fineweb_polygons.directions.retrieval.stages.v8 import V8RunSummary
+from fineweb_polygons.directions.retrieval.stages.v9 import V9RunSummary
+from fineweb_polygons.directions.retrieval.stages.v10 import V10RunSummary
 
 
 def test_cli_reports_foundation_only(capsys) -> None:
@@ -295,7 +297,7 @@ def test_direction2_config_factory_uses_external_defaults(tmp_path: Path) -> Non
         output_batch_size=4,
     )
 
-    config = cli_module._direction2_config(parsed, paths)
+    config = registry._lexical_v1_config(parsed, paths)
 
     assert config.monaco_pbf == data_root / "raw/monaco-latest.osm.pbf"
     assert config.liechtenstein_pbf == (data_root / "raw/liechtenstein-latest.osm.pbf")
@@ -423,7 +425,7 @@ def test_direction2_v2_config_factory_uses_versioned_external_defaults(
         output_batch_size=4,
     )
 
-    config = cli_module._direction2_v2_config(parsed, paths)
+    config = registry._lexical_v2_config(parsed, paths)
 
     assert config.output_dir == data_root / "artifacts/direction-2/lexical-v2"
     assert config.manifest_path == (
@@ -446,7 +448,7 @@ def test_cli_reports_unknown_commands_with_the_command_name(monkeypatch) -> None
         def error(self, message):
             raise ValueError(message)
 
-    monkeypatch.setattr(cli_module, "_build_parser", lambda: FakeParser())
+    monkeypatch.setattr(cli_module, "_build_parser", lambda *_: FakeParser())
 
     with pytest.raises(ValueError, match="unknown command: unexpected"):
         cli_module.main(["unexpected"])
@@ -463,17 +465,26 @@ def test_cli_external_stage_composes_paths_runner_and_summary(
 
     def run(config):
         captured["config"] = config
-        return "summary"
+        return FakeSummary()
 
-    assert (
-        cli_module._run_external_stage(
-            tmp_path,
-            config_factory=make_config,
-            runner=run,
-            summary_record=lambda summary: {"value": summary},
-        )
-        == 0
+    class FakeSummary:
+        def to_record(self):
+            return {"value": "summary"}
+
+    command = registry.Command(
+        name="fake",
+        help="fake",
+        direction=registry.LEXICAL.id,
+        produces=(),
+        arguments=(),
+        build_config=lambda parsed, paths: make_config(paths),
+        runner=run,
+        runner_keyword="fake_runner",
+        requires_external_root=False,
     )
+    parsed = argparse.Namespace(command="fake", data_root=tmp_path)
+
+    assert cli_module._execute(command, parsed, lambda config: run(config)) == 0
 
     assert captured == {"data_root": tmp_path, "config": "config"}
     assert json.loads(capsys.readouterr().out) == {"value": "summary"}
@@ -635,7 +646,7 @@ def test_cli_runs_v7_segmentation_and_serializes_its_summary(
         constructor_kwargs.update(kwargs)
         return argparse.Namespace(**kwargs)
 
-    monkeypatch.setattr(cli_module, "V7RunConfig", fake_config)
+    monkeypatch.setattr(retrieval, "V7RunConfig", fake_config)
 
     def fake_runner(config):
         captured["config"] = config

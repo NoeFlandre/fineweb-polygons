@@ -45,6 +45,7 @@ addopts = [
     "--cov-report=json",
 ]
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 branch = true

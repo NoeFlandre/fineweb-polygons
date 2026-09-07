@@ -3,23 +3,56 @@
 This directory is the navigation layer for the public
 [FineWeb Polygons dataset](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons).
 
-The current public experiment is [Direction 1: FineWeb polygon retrieval](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md),
-covering immutable V1–V10 artifacts. Its machine-readable record is
-[`directions/direction-1-fineweb-retrieval.json`](directions/direction-1-fineweb-retrieval.json).
+## Layout
 
-The separate [Direction 2: lexical polygon candidates](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
-contains the immutable `direction-2-lexical-v1` baseline and the
-specificity-aware `direction-2-lexical-v2` POC. Its machine-readable record
-is [`directions/direction-2-lexical-candidates.json`](directions/direction-2-lexical-candidates.json).
+Every research direction publishes under the same shape, so a new direction
+adds a prefix rather than a new convention:
 
-- [`catalog.json`](catalog.json) maps every public Direction 1 and Direction 2
-  data path to its country/split, source version, standalone README, and
-  manifest files.
-- Each `data/v*/README.md` is a concise contract for that version.
+```
+data/<direction>/<version>/<country>.<ext>      # published evidence + its README
+metadata/<direction>/<version>/                 # manifests and side artifacts
+```
+
+- `data/direction-1-retrieval/v1` … `v10` — Direction 1, frozen.
+- `data/direction-2-lexical/v1`, `v2` — Direction 2, active POC.
+
+Hugging Face configuration names are stable and independent of these paths, so
+`load_dataset("NoeFlandre/fineweb-polygons", "v10")` and
+`load_dataset("NoeFlandre/fineweb-polygons", "direction_2_lexical_v2")`
+keep working.
+
+## Where to look
+
+- [`catalog.json`](catalog.json) is the machine-readable index: every
+  direction, version, split, configuration name, data path, metadata path, and
+  standalone card. It is generated from
+  [`src/fineweb_polygons/registry.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/registry.py),
+  so it cannot drift from the code.
+- [`dataset-catalog.md`](dataset-catalog.md) is the same index in readable form.
+- [`huggingface-configs.json`](huggingface-configs.json) is the configuration
+  block used by the dataset card.
+- `directions/<direction-id>.json` and `.md` describe one direction's question,
+  status, and complete version list.
+- Each `data/<direction>/<version>/README.md` is a concise contract for that
+  version.
 - Each manifest records the source fingerprints, settings, counts, and output
-  hash needed to reproduce or audit the release.
+  hash needed to reproduce or audit that release.
+
+Manifests are immutable records of the run that produced a file. A manifest
+written before this reorganization still names the path the file had when it
+was published; `catalog.json` is the authority on where a file lives now.
+
+## Directions
+
+- [Direction 1: FineWeb polygon retrieval](directions/direction-1-fineweb-retrieval.md)
+  — frozen, V1–V10. Record:
+  [`directions/direction-1-fineweb-retrieval.json`](directions/direction-1-fineweb-retrieval.json).
+  Per-version contracts: [`direction-1-retrieval/versions.md`](direction-1-retrieval/versions.md).
+- [Direction 2: lexical polygon candidates](directions/direction-2-lexical-candidates.md)
+  — active POC. Record:
+  [`directions/direction-2-lexical-candidates.json`](directions/direction-2-lexical-candidates.json).
 
 The [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) contains
-the code and readable [version guide](https://noeflandre.github.io/fineweb-polygons/versions/).
-Raw FineWeb, OSM PBFs, model caches, checkpoints, and logs stay on the Seagate
-project volume; this public dataset contains filtered evidence only.
+the code and documentation. Raw FineWeb, OSM PBFs, model caches, checkpoints,
+and logs stay on the Seagate project volume; this public dataset contains
+filtered evidence only.

@@ -15,67 +15,67 @@ configs:
   - config_name: v1
     data_files:
       - split: train
-        path: data/v1/monaco-v1-10bt-000-v3.jsonl
+        path: data/direction-1-retrieval/v1/monaco.jsonl
   - config_name: v2
     data_files:
       - split: train
-        path: data/v2/monaco-v2-10bt-000-v2.jsonl
+        path: data/direction-1-retrieval/v2/monaco.jsonl
   - config_name: v3
     data_files:
       - split: train
-        path: data/v3/monaco-v3-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v3/monaco.jsonl
   - config_name: v4
     data_files:
       - split: train
-        path: data/v4/monaco-v4-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v4/monaco.jsonl
   - config_name: v5
     data_files:
       - split: monaco
-        path: data/v5/monaco-v5-10bt-000-v3.jsonl
+        path: data/direction-1-retrieval/v5/monaco.jsonl
       - split: liechtenstein
-        path: data/v5/liechtenstein-v5-10bt-000-v2.jsonl
+        path: data/direction-1-retrieval/v5/liechtenstein.jsonl
   - config_name: v6
     data_files:
       - split: monaco
-        path: data/v6/monaco-v6-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v6/monaco.jsonl
       - split: liechtenstein
-        path: data/v6/liechtenstein-v6-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v6/liechtenstein.jsonl
   - config_name: v7
     data_files:
       - split: monaco
-        path: data/v7/monaco-v7-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v7/monaco.jsonl
       - split: liechtenstein
-        path: data/v7/liechtenstein-v7-10bt-000-v1.jsonl
+        path: data/direction-1-retrieval/v7/liechtenstein.jsonl
   - config_name: v8
     data_files:
       - split: monaco
-        path: data/v8/monaco-v8-10bt-000-v1-topic.jsonl
+        path: data/direction-1-retrieval/v8/monaco.jsonl
       - split: liechtenstein
-        path: data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl
+        path: data/direction-1-retrieval/v8/liechtenstein.jsonl
   - config_name: v9
     data_files:
       - split: monaco
-        path: data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl
+        path: data/direction-1-retrieval/v9/monaco.jsonl
       - split: liechtenstein
-        path: data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl
+        path: data/direction-1-retrieval/v9/liechtenstein.jsonl
   - config_name: v10
     data_files:
       - split: monaco
-        path: data/v10/monaco-v10-10bt-000-v1-landuse.jsonl
+        path: data/direction-1-retrieval/v10/monaco.jsonl
       - split: liechtenstein
-        path: data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl
+        path: data/direction-1-retrieval/v10/liechtenstein.jsonl
   - config_name: direction_2_lexical_v1
     data_files:
       - split: monaco
-        path: data/direction-2/lexical-v1/monaco.parquet
+        path: data/direction-2-lexical/v1/monaco.parquet
       - split: liechtenstein
-        path: data/direction-2/lexical-v1/liechtenstein.parquet
+        path: data/direction-2-lexical/v1/liechtenstein.parquet
   - config_name: direction_2_lexical_v2
     data_files:
       - split: monaco
-        path: data/direction-2/lexical-v2/monaco.parquet
+        path: data/direction-2-lexical/v2/monaco.parquet
       - split: liechtenstein
-        path: data/direction-2/lexical-v2/liechtenstein.parquet
+        path: data/direction-2-lexical/v2/liechtenstein.parquet
 ---
 
 # FineWeb Polygons
@@ -104,7 +104,7 @@ the same all-area inventory and Aho–Corasick matcher, but first measures name
 reuse in OSM and document frequency in FineWeb, then gates generic names with
 the source country in the same sentence. Each version has its own standalone
 card, inventory/manifest, code path, and HF configuration under
-`data/direction-2/` and `metadata/direction-2/`.
+`data/direction-2-lexical/` and `metadata/direction-2-lexical/`.
 
 ## Version contracts
 
@@ -135,7 +135,7 @@ Run with `--retrieval-version v4`. V4 uses the same polygon profile as V3: every
 
 A FineWeb document is kept when the polygon name and `Monaco` or `Principality of Monaco` both appear in the text. The URL is retained as metadata and evidence, but it is not a selection condition. Final evidence is deduplicated per polygon and document, and the output keeps the complete FineWeb text.
 
-The exact definitions are stored in [`src/fineweb_polygons/versions.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/versions.py). Every run manifest copies the selected definition and hashes it as part of the configuration, so a changed definition cannot silently resume an old run. See the [version guide](https://noeflandre.github.io/fineweb-polygons/versions/) for the same contract in a readable format.
+The exact definitions are stored in [`src/fineweb_polygons/directions/retrieval/versions.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/directions/retrieval/versions.py). Every run manifest copies the selected definition and hashes it as part of the configuration, so a changed definition cannot silently resume an old run. See the [version guide](https://noeflandre.github.io/fineweb-polygons/directions/fineweb-retrieval/versions/) for the same contract in a readable format.
 
 ### V5 - specific polygon areas with country-in-text matching
 
@@ -182,22 +182,22 @@ V5 and V6 publish one split for Monaco and one split for Liechtenstein. Both use
 same full-text evidence schema and can be inspected independently in the
 Hugging Face viewer.
 
-- V1: `data/v1/monaco-v1-10bt-000-v3.jsonl`
-- V2: `data/v2/monaco-v2-10bt-000-v2.jsonl`
-- V3: `data/v3/monaco-v3-10bt-000-v1.jsonl`
-- V4: `data/v4/monaco-v4-10bt-000-v1.jsonl`
-- V5 Monaco: `data/v5/monaco-v5-10bt-000-v3.jsonl`
-- V5 Liechtenstein: `data/v5/liechtenstein-v5-10bt-000-v2.jsonl`
-- V6 Monaco: `data/v6/monaco-v6-10bt-000-v1.jsonl`
-- V6 Liechtenstein: `data/v6/liechtenstein-v6-10bt-000-v1.jsonl`
-- V7 Monaco: `data/v7/monaco-v7-10bt-000-v1.jsonl`
-- V7 Liechtenstein: `data/v7/liechtenstein-v7-10bt-000-v1.jsonl`
-- V8 Monaco: `data/v8/monaco-v8-10bt-000-v1-topic.jsonl`
-- V8 Liechtenstein: `data/v8/liechtenstein-v8-10bt-000-v1-topic.jsonl`
-- V9 Monaco: `data/v9/monaco-v9-10bt-000-v1-topic-sentences.jsonl`
-- V9 Liechtenstein: `data/v9/liechtenstein-v9-10bt-000-v1-topic-sentences.jsonl`
-- V10 Monaco: `data/v10/monaco-v10-10bt-000-v1-landuse.jsonl`
-- V10 Liechtenstein: `data/v10/liechtenstein-v10-10bt-000-v1-landuse.jsonl`
+- V1: `data/direction-1-retrieval/v1/monaco.jsonl`
+- V2: `data/direction-1-retrieval/v2/monaco.jsonl`
+- V3: `data/direction-1-retrieval/v3/monaco.jsonl`
+- V4: `data/direction-1-retrieval/v4/monaco.jsonl`
+- V5 Monaco: `data/direction-1-retrieval/v5/monaco.jsonl`
+- V5 Liechtenstein: `data/direction-1-retrieval/v5/liechtenstein.jsonl`
+- V6 Monaco: `data/direction-1-retrieval/v6/monaco.jsonl`
+- V6 Liechtenstein: `data/direction-1-retrieval/v6/liechtenstein.jsonl`
+- V7 Monaco: `data/direction-1-retrieval/v7/monaco.jsonl`
+- V7 Liechtenstein: `data/direction-1-retrieval/v7/liechtenstein.jsonl`
+- V8 Monaco: `data/direction-1-retrieval/v8/monaco.jsonl`
+- V8 Liechtenstein: `data/direction-1-retrieval/v8/liechtenstein.jsonl`
+- V9 Monaco: `data/direction-1-retrieval/v9/monaco.jsonl`
+- V9 Liechtenstein: `data/direction-1-retrieval/v9/liechtenstein.jsonl`
+- V10 Monaco: `data/direction-1-retrieval/v10/monaco.jsonl`
+- V10 Liechtenstein: `data/direction-1-retrieval/v10/liechtenstein.jsonl`
 
 These are evidence records, not a copy of the raw FineWeb shard.
 The published schemas are intentionally documented separately:
@@ -248,7 +248,7 @@ FineWeb text. The URL is not a selection condition. Each V6 row keeps the full
 FineWeb text, the closest normalized distance, and the original-text sentence
 for the polygon name and country name. V6 does not include `text_excerpt` or
 `url_excerpt` columns. The published Monaco and Liechtenstein files are separate
-viewer splits under `data/v6/`.
+viewer splits under `data/direction-1-retrieval/v6/`.
 
 ### V7 — exact sentence lists from V6
 

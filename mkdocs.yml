@@ -17,12 +17,14 @@ theme:
 
 nav:
   - Overview: index.md
-  - Directions:
-      - Registry: directions/README.md
-      - "Direction 1: FineWeb retrieval": directions/fineweb-retrieval/README.md
-      - "Direction 2: lexical candidates": directions/lexical-candidates/README.md
-      - "Direction 2 lexical V2": directions/lexical-candidates/lexical-v2/README.md
-  - Versions: versions.md
+  - Direction registry: directions/README.md
+  - "Direction 1: FineWeb retrieval":
+      - Overview: directions/fineweb-retrieval/README.md
+      - Version contracts: directions/fineweb-retrieval/versions.md
+  - "Direction 2: lexical candidates":
+      - Overview: directions/lexical-candidates/README.md
+      - "V1: broad lexical baseline": directions/lexical-candidates/v1/README.md
+      - "V2: specificity-aware": directions/lexical-candidates/v2/README.md
   - Dataset catalog: dataset-catalog.md
   - Architecture:
       - Foundation: architecture/foundation.md

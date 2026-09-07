@@ -11,7 +11,7 @@ The current V1, V2, V3, and V4 releases add narrow, resumable exact-match baseli
 
 The [dataset catalog](dataset-catalog.md) maps every public data file to its
 version, country split, standalone README, and manifest. The same catalog is
-available as [JSON in the repository](dataset-catalog.json) and in the public
+available as [JSON](https://github.com/NoeFlandre/fineweb-polygons/blob/main/metadata/catalog.json) and in the public
 [Hugging Face metadata directory](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/tree/main/metadata).
 
 [Direction 2: lexical polygon candidates](directions/lexical-candidates/README.md)
