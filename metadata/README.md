@@ -33,8 +33,9 @@ keep working.
 - [`dataset-catalog.md`](dataset-catalog.md) is the same index in readable form.
 - [`huggingface-configs.json`](huggingface-configs.json) is the configuration
   block used by the dataset card.
-- `directions/<direction-id>.json` and `.md` describe one direction's question,
-  status, and complete version list.
+- `directions/<direction-id>.json` describes one direction's status and complete
+  version list; its standalone GitHub README explains the research question and
+  scope.
 - Each `data/<direction>/<version>/README.md` is a concise contract for that
   version.
 - Each manifest records the source fingerprints, settings, counts, and output
@@ -46,12 +47,11 @@ was published; `catalog.json` is the authority on where a file lives now.
 
 ## Directions
 
-- [Direction 1: FineWeb polygon retrieval](directions/direction-1-fineweb-retrieval.md)
-  — frozen, V1–V10. Record:
+- [Direction 1: FineWeb polygon retrieval](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/fineweb-retrieval/README.md)
+  — frozen, V1–V10. HF record:
   [`directions/direction-1-fineweb-retrieval.json`](directions/direction-1-fineweb-retrieval.json).
-  Per-version contracts: [`direction-1-retrieval/versions.md`](direction-1-retrieval/versions.md).
-- [Direction 2: lexical polygon candidates](directions/direction-2-lexical-candidates.md)
-  — active POC. Record:
+- [Direction 2: lexical polygon candidates](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
+  — active POC. HF record:
   [`directions/direction-2-lexical-candidates.json`](directions/direction-2-lexical-candidates.json).
 - [Direction 3: text to geographic footprint](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/text-geographic-footprint/README.md)
   — planned foundation only. HF record:
