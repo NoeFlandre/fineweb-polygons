@@ -73,6 +73,25 @@ def test_unknown_directions_and_versions_raise() -> None:
         registry.RETRIEVAL.version("v99")
 
 
+def test_planned_geographic_footprint_direction_has_no_public_version() -> None:
+    direction = registry.GEOGRAPHIC_FOOTPRINT
+
+    assert direction.status == "planned"
+    assert direction.versions == ()
+    assert direction.latest_version is None
+    assert direction.package == (
+        "fineweb_polygons.directions.text_geographic_footprint"
+    )
+
+
+def test_planned_direction_renders_metadata_without_a_dataset_config() -> None:
+    record = catalog.build_direction_record(registry.GEOGRAPHIC_FOOTPRINT, "2026-09-08")
+
+    assert record["latest_version"] is None
+    assert record["versions"] == []
+    assert record["outputs"] == {"hf_config": None, "data_files": []}
+
+
 def test_generated_catalog_artifacts_are_committed_and_current() -> None:
     import scripts.build_catalog as build_catalog
 
@@ -93,7 +112,10 @@ def test_catalog_covers_every_declared_direction_and_version() -> None:
         assert [version["id"] for version in entry["versions"]] == [
             version.id for version in direction.versions
         ]
-        assert entry["latest_version"] == direction.latest_version.id
+        expected_latest = (
+            None if direction.latest_version is None else direction.latest_version.id
+        )
+        assert entry["latest_version"] == expected_latest
 
 
 def test_huggingface_configs_match_the_registry() -> None:

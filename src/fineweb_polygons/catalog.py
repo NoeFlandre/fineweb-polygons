@@ -64,6 +64,7 @@ def _version_record(version: Version) -> dict[str, Any]:
 
 
 def _direction_record(direction: Direction) -> dict[str, Any]:
+    latest = direction.latest_version
     return {
         "id": direction.id,
         "name": direction.name,
@@ -71,8 +72,23 @@ def _direction_record(direction: Direction) -> dict[str, Any]:
         "package": direction.package,
         "readme": direction.documentation,
         "record": f"metadata/directions/{direction.id}.json",
-        "latest_version": direction.latest_version.id,
+        "latest_version": None if latest is None else latest.id,
         "versions": [_version_record(version) for version in direction.versions],
+    }
+
+
+def _latest_version_id(direction: Direction) -> str | None:
+    latest = direction.latest_version
+    return None if latest is None else latest.id
+
+
+def _latest_output(direction: Direction) -> dict[str, Any]:
+    latest = direction.latest_version
+    if latest is None:
+        return {"hf_config": None, "data_files": []}
+    return {
+        "hf_config": latest.hf_config,
+        "data_files": [dict(entry) for entry in latest.data_files()],
     }
 
 
@@ -100,12 +116,9 @@ def build_direction_record(direction: Direction, catalog_date: str) -> dict[str,
         "readme": direction.documentation,
         "github": DATASET["github"],
         "huggingface": DATASET["huggingface"],
-        "latest_version": direction.latest_version.id,
+        "latest_version": _latest_version_id(direction),
         "versions": [version.id for version in direction.versions],
-        "outputs": {
-            "hf_config": direction.latest_version.hf_config,
-            "data_files": [dict(e) for e in direction.latest_version.data_files()],
-        },
+        "outputs": _latest_output(direction),
         "historical_outputs": {
             version.id: {
                 "hf_config": version.hf_config,
@@ -162,11 +175,13 @@ def build_catalog_page() -> str:
         "",
     ]
     for direction in DIRECTIONS:
+        latest = direction.latest_version
+        latest_label = "planned (no version)" if latest is None else latest.id
         lines += [
             f"## {direction.name}",
             "",
             f"**ID:** `{direction.id}` &middot; **Status:** {direction.status}"
-            f" &middot; **Latest:** `{direction.latest_version.id}`",
+            f" &middot; **Latest:** `{latest_label}`",
             "",
             f"Documentation: [`{direction.documentation}`]"
             f"({github}/blob/main/{direction.documentation})",

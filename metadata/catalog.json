@@ -325,6 +325,16 @@
           "card": "data/direction-2-lexical/v2/README.md"
         }
       ]
+    },
+    {
+      "id": "direction-3-text-geographic-footprint",
+      "name": "Text-to-geographic-footprint",
+      "status": "planned",
+      "package": "fineweb_polygons.directions.text_geographic_footprint",
+      "readme": "docs/directions/text-geographic-footprint/README.md",
+      "record": "metadata/directions/direction-3-text-geographic-footprint.json",
+      "latest_version": null,
+      "versions": []
     }
   ]
 }

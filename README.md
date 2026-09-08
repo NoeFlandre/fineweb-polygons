@@ -106,6 +106,16 @@ the source country in the same sentence. Each version has its own standalone
 card, inventory/manifest, code path, and HF configuration under
 `data/direction-2-lexical/` and `metadata/direction-2-lexical/`.
 
+## Direction 3 — text to geographic footprint
+
+[Direction 3 documentation](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/text-geographic-footprint/README.md)
+is a separate planned research direction. It reverses the first two approaches:
+it starts with geographic entities mentioned in FineWeb text, reconstructs their
+geographic footprints, and then relates topic evidence to OSM polygons. The
+direction is registered in the catalog and has a standalone [Hugging Face
+foundation card](https://huggingface.co/datasets/NoeFlandre/fineweb-polygons/blob/main/data/direction-3-text-geographic-footprint/README.md),
+but it has no public version or data configuration yet.
+
 ## Version contracts
 
 ### V1 — named polygon exact matching

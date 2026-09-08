@@ -24,6 +24,16 @@ def _modules(relative: str) -> list[Path]:
     return sorted((_SOURCE_ROOT / relative).rglob("*.py"))
 
 
+def _direction_modules() -> list[Path]:
+    return sorted(
+        module
+        for direction in registry.DIRECTIONS
+        for module in _modules(
+            direction.package.removeprefix(f"{_PACKAGE}.").replace(".", "/")
+        )
+    )
+
+
 def _imported_packages(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported: set[str] = set()
@@ -50,7 +60,7 @@ def test_core_never_depends_on_a_direction(module: Path) -> None:
 
 @pytest.mark.parametrize(
     "module",
-    _modules("directions/retrieval") + _modules("directions/lexical"),
+    _direction_modules(),
     ids=lambda p: str(p.relative_to(_SOURCE_ROOT)),
 )
 def test_directions_never_import_each_other(module: Path) -> None:
@@ -70,7 +80,7 @@ def test_directions_never_import_each_other(module: Path) -> None:
 
 @pytest.mark.parametrize(
     "module",
-    _modules("directions/retrieval") + _modules("directions/lexical"),
+    _direction_modules(),
     ids=lambda p: str(p.relative_to(_SOURCE_ROOT)),
 )
 def test_directions_never_depend_on_the_registry_or_the_cli(module: Path) -> None:

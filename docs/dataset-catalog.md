@@ -41,6 +41,15 @@ Documentation: [`docs/directions/lexical-candidates/README.md`](https://github.c
 | `direction-2-lexical-v1` | monaco, liechtenstein | `direction_2_lexical_v1` | `data/direction-2-lexical/v1/` | Broad all-area Aho-Corasick lexical baseline. |
 | `direction-2-lexical-v2` | monaco, liechtenstein | `direction_2_lexical_v2` | `data/direction-2-lexical/v2/` | Specificity-aware gating of generic names by measured reuse. |
 
+## Text-to-geographic-footprint
+
+**ID:** `direction-3-text-geographic-footprint` &middot; **Status:** planned &middot; **Latest:** `planned (no version)`
+
+Documentation: [`docs/directions/text-geographic-footprint/README.md`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/text-geographic-footprint/README.md)
+
+| Version | Splits | Config | Path | Summary |
+| --- | --- | --- | --- | --- |
+
 ## How to inspect a release
 
 1. Open the version's `README.md` beside its data for the standalone

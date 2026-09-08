@@ -13,6 +13,7 @@ boundary: Direction 2's first version is `direction-2-lexical-v1`, not V11.
 | --- | --- | --- | --- |
 | [Direction 1: FineWeb polygon retrieval](fineweb-retrieval/README.md) | Frozen | V1–V10 | Lexically retrieve FineWeb evidence for OSM polygon names, then narrow it to topic sentences and local-model `yes` sentences. |
 | [Direction 2: lexical polygon candidates](lexical-candidates/README.md) | Active POC | lexical-v1, lexical-v2 | Validate large-scale lexical candidate generation, then reduce generic-name noise with deterministic specificity rules. |
+| [Direction 3: text to geographic footprint](text-geographic-footprint/README.md) | Planned | None yet | Start from geographic entities mentioned in text, recover their footprints, then relate topic evidence to OSM polygons. |
 
 The authoritative machine-readable form of this table is
 [`src/fineweb_polygons/registry.py`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/src/fineweb_polygons/registry.py).
@@ -52,6 +53,10 @@ fails if either rule is broken.
 4. Run `just catalog` to regenerate every catalog artifact.
 5. Write `docs/directions/<name>/README.md` and add it to the `mkdocs.yml`
    navigation.
+
+Direction 3 is currently only a documented, registered foundation. It has no
+public version, data file, or Hugging Face configuration yet; the first real
+output will define those contracts explicitly.
 
 `cli.py` never changes: it builds its parser from the registry.
 

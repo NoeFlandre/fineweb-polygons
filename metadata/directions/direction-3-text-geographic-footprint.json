@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "record_date": "2026-09-07",
+  "direction_id": "direction-3-text-geographic-footprint",
+  "name": "Text-to-geographic-footprint",
+  "status": "planned",
+  "package": "fineweb_polygons.directions.text_geographic_footprint",
+  "readme": "docs/directions/text-geographic-footprint/README.md",
+  "github": "https://github.com/NoeFlandre/fineweb-polygons",
+  "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
+  "latest_version": null,
+  "versions": [],
+  "outputs": {
+    "hf_config": null,
+    "data_files": []
+  },
+  "historical_outputs": {}
+}

@@ -15,6 +15,8 @@ metadata/<direction>/<version>/                 # manifests and side artifacts
 
 - `data/direction-1-retrieval/v1` … `v10` — Direction 1, frozen.
 - `data/direction-2-lexical/v1`, `v2` — Direction 2, active POC.
+- `data/direction-3-text-geographic-footprint/` — reserved for Direction 3;
+  no version or data file exists yet because the direction is still planned.
 
 Hugging Face configuration names are stable and independent of these paths, so
 `load_dataset("NoeFlandre/fineweb-polygons", "v10")` and
@@ -51,6 +53,9 @@ was published; `catalog.json` is the authority on where a file lives now.
 - [Direction 2: lexical polygon candidates](directions/direction-2-lexical-candidates.md)
   — active POC. Record:
   [`directions/direction-2-lexical-candidates.json`](directions/direction-2-lexical-candidates.json).
+- [Direction 3: text to geographic footprint](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/text-geographic-footprint/README.md)
+  — planned foundation only. HF record:
+  [`directions/direction-3-text-geographic-footprint.json`](directions/direction-3-text-geographic-footprint.json).
 
 The [GitHub repository](https://github.com/NoeFlandre/fineweb-polygons) contains
 the code and documentation. Raw FineWeb, OSM PBFs, model caches, checkpoints,

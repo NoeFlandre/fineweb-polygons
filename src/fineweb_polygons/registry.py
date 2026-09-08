@@ -80,9 +80,9 @@ class Direction:
     versions: tuple[Version, ...]
 
     @property
-    def latest_version(self) -> Version:
-        """Return the newest version declared for this direction."""
-        return self.versions[-1]
+    def latest_version(self) -> Version | None:
+        """Return the newest version, or ``None`` for a planned direction."""
+        return self.versions[-1] if self.versions else None
 
     def version(self, version_id: str) -> Version:
         """Return one declared version or raise for an unknown ID."""
@@ -285,7 +285,20 @@ LEXICAL = Direction(
     ),
 )
 
-DIRECTIONS: tuple[Direction, ...] = (RETRIEVAL, LEXICAL)
+# --------------------------------------------------------------------------
+# Direction 3 - text to geographic footprint (planned)
+# --------------------------------------------------------------------------
+
+GEOGRAPHIC_FOOTPRINT = Direction(
+    id="direction-3-text-geographic-footprint",
+    name="Text-to-geographic-footprint",
+    package="fineweb_polygons.directions.text_geographic_footprint",
+    status="planned",
+    documentation="docs/directions/text-geographic-footprint/README.md",
+    versions=(),
+)
+
+DIRECTIONS: tuple[Direction, ...] = (RETRIEVAL, LEXICAL, GEOGRAPHIC_FOOTPRINT)
 
 
 def direction(direction_id: str) -> Direction:
