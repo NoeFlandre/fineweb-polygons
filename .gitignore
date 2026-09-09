@@ -43,3 +43,14 @@ runs/
 logs/
 artifacts/
 checkpoints/
+
+# Seagate-only project state and reproducibility outputs.
+archive/
+cache/
+models/
+quality/
+tmp/
+site-*/
+coverage-*
+sqlite-probe
+v8-topic-vocabulary-v1.json
