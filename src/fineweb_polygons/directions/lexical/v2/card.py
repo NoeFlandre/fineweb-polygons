@@ -25,7 +25,7 @@ def render_dataset_card(manifest: Mapping[str, object]) -> str:
         "---",
         "# Direction 2 — lexical polygon candidates V2",
         "",
-        "This version reduces generic-name noise while keeping the retrieval "
+        "This version measures name specificity while keeping the retrieval "
         "lexical and deterministic.",
         "",
         "## Measured run",
@@ -41,19 +41,17 @@ def render_dataset_card(manifest: Mapping[str, object]) -> str:
         "matching pass",
         f"- {results['matches_found']} matches written",
         f"- {results['distinctive_matches']} distinctive-name matches",
-        f"- {results['generic_matches']} generic-name matches with country",
+        f"- {results['generic_matches']} generic-name matches",
         f"- {results['unique_polygons_matched']} unique polygons matched",
         "",
         "## Rule",
         "",
         "A name is discarded when it has no letters, fewer than three "
         "alphabetic characters, or is the exact source country name. A name "
-        "is generic when it is reused by more "
-        "than one OSM polygon, appears in more than 0.1% of FineWeb documents, "
-        "or is one token with at most eight letters.",
+        "is generic when it is reused by more than one OSM polygon or appears "
+        "in more than 0.1% of FineWeb documents.",
         "",
-        "Distinctive names are matched directly. Generic names are kept only "
-        "when the source country appears independently in the same sentence. "
+        "Distinctive and generic names are matched directly. "
         "The URL is provenance only. There is no LLM, embedding, thematic "
         "filter, tag filter, deduplication, or geographic disambiguation.",
         "",
@@ -62,8 +60,6 @@ def render_dataset_card(manifest: Mapping[str, object]) -> str:
         "- FineWeb frequency ratio: "
         f"{configuration['fineweb_document_frequency_ratio']}",
         f"- Minimum alphabetic characters: {configuration['minimum_name_letters']}",
-        "- Short single-token limit: "
-        f"{configuration['short_single_token_max_letters']}",
         f"- Frequency inventory reused: {configuration['frequency_pass_reused']}",
         "",
         "## Columns",
@@ -77,7 +73,7 @@ def render_dataset_card(manifest: Mapping[str, object]) -> str:
         "",
         "## Source splits",
         "",
-        "| Source | Matches | Distinctive | Generic with country |",
+        "| Source | Matches | Distinctive | Generic |",
         "| --- | ---: | ---: | ---: |",
         *(
             "| "
@@ -89,7 +85,7 @@ def render_dataset_card(manifest: Mapping[str, object]) -> str:
         "This card is generated deterministically from the run manifest. The "
         "full contract is in the GitHub V2 README at "
         "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/"
-        "directions/lexical-candidates/lexical-v2/README.md. The original "
+        "directions/lexical-candidates/v2/README.md. The original "
         "Direction 2 V1 README remains available.",
         "",
     ]
@@ -112,7 +108,7 @@ def _column_description(column: str) -> str:
         "fineweb_url": "FineWeb document URL",
         "sentence": "the sentence containing the match",
         "context": "the sentence plus one neighboring sentence on each side",
-        "name_match_class": "distinctive_name or generic_name_with_country",
+        "name_match_class": "distinctive_name or generic_name",
         "osm_polygon_count": "number of OSM polygons using the normalized name",
         "fineweb_document_frequency": (
             "FineWeb documents containing the normalized name"

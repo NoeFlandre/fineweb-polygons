@@ -14,13 +14,11 @@ import fineweb_polygons.directions.lexical.v2.specificity as v2_specificity
 from fineweb_polygons.core.artifact_io import sha256_file
 from fineweb_polygons.directions.lexical.matching import (
     AhoCorasickPatternMatcher,
-    PatternMatch,
 )
 from fineweb_polygons.directions.lexical.models import PolygonRecord
 from fineweb_polygons.directions.lexical.v2.card import render_dataset_card
 from fineweb_polygons.directions.lexical.v2.matching import (
     V2NameMatcher,
-    has_independent_country_match,
 )
 from fineweb_polygons.directions.lexical.v2.models import (
     DIRECTION_V2_VERSION,
@@ -141,7 +139,7 @@ def test_name_policy_rejects_short_and_numeric_names() -> None:
     assert numeric.reason == "no_letters"
 
 
-def test_name_policy_keeps_three_letters_but_marks_eight_generic() -> None:
+def test_name_policy_keeps_rare_single_token_names_distinctive() -> None:
     three_letters = classify_name(
         "Cat",
         polygon_count=1,
@@ -155,22 +153,10 @@ def test_name_policy_keeps_three_letters_but_marks_eight_generic() -> None:
         document_count=1000,
     )
 
-    assert three_letters.decision == "generic"
-    assert three_letters.reason == "short_single_token"
-    assert eight_letters.decision == "generic"
-    assert eight_letters.reason == "short_single_token"
-
-
-def test_name_policy_marks_short_single_token_names_generic() -> None:
-    result = classify_name(
-        "Central",
-        polygon_count=1,
-        document_frequency=1,
-        document_count=1000,
-    )
-
-    assert result.decision == "generic"
-    assert result.reason == "short_single_token"
+    assert three_letters.decision == "distinctive"
+    assert three_letters.reason == "specific"
+    assert eight_letters.decision == "distinctive"
+    assert eight_letters.reason == "specific"
 
 
 def test_name_policy_marks_reused_names_generic() -> None:
@@ -230,8 +216,8 @@ def test_name_policy_does_not_discard_a_name_for_a_different_country() -> None:
         country_name="France",
     )
 
-    assert result.decision == "generic"
-    assert result.reason == "short_single_token"
+    assert result.decision == "distinctive"
+    assert result.reason == "specific"
 
 
 def test_name_policy_does_not_decode_percent_escapes_in_names_or_countries() -> None:
@@ -646,37 +632,7 @@ def test_v2_matcher_exposes_document_level_unique_patterns() -> None:
     ) == ("palais du prince",)
 
 
-def test_country_evidence_must_not_overlap_the_generic_name() -> None:
-    country_matcher = AhoCorasickPatternMatcher.build(("Monaco",))
-
-    assert not has_independent_country_match(
-        country_matcher.find("Monaco"),
-        name_start=0,
-        name_end=6,
-    )
-    assert has_independent_country_match(
-        country_matcher.find("Central in Monaco"),
-        name_start=0,
-        name_end=7,
-    )
-
-
-def test_country_evidence_treats_touching_spans_as_independent() -> None:
-    country_match = PatternMatch(pattern="monaco", start=0, end=6)
-
-    assert has_independent_country_match(
-        (country_match,),
-        name_start=6,
-        name_end=13,
-    )
-    assert has_independent_country_match(
-        (PatternMatch(pattern="monaco", start=7, end=13),),
-        name_start=0,
-        name_end=7,
-    )
-
-
-def test_run_direction2_v2_counts_and_gates_specificity(
+def test_run_direction2_v2_counts_and_matches_specificity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config, _ = _make_v2_fixture(tmp_path)
@@ -709,9 +665,9 @@ def test_run_direction2_v2_counts_and_gates_specificity(
     assert summary.direction == DIRECTION_V2_VERSION
     assert summary.fineweb_docs_frequency_pass == 4
     assert summary.fineweb_docs_match_pass == 4
-    assert summary.matches_found == 4
+    assert summary.matches_found == 10
     assert summary.unique_polygons_matched == 4
-    assert summary.generic_matches == 2
+    assert summary.generic_matches == 8
     assert summary.distinctive_matches == 2
     assert summary.names_discarded == 2
     assert summary.generic_names == 1
@@ -723,21 +679,39 @@ def test_run_direction2_v2_counts_and_gates_specificity(
     assert monaco_rows["matched_alias"].to_pylist() == [
         "Palais du Prince",
         "Central",
+        "Central",
+        "Central",
+        "Central",
     ]
     assert liechtenstein_rows["matched_alias"].to_pylist() == [
         "Central",
+        "Central",
+        "Central",
         "Alps View",
+        "Central",
     ]
     assert monaco_rows["name_match_class"].to_pylist() == [
         "distinctive_name",
-        "generic_name_with_country",
+        "generic_name",
+        "generic_name",
+        "generic_name",
+        "generic_name",
     ]
     assert liechtenstein_rows["name_match_class"].to_pylist() == [
-        "generic_name_with_country",
+        "generic_name",
+        "generic_name",
+        "generic_name",
         "distinctive_name",
+        "generic_name",
     ]
-    assert monaco_rows["fineweb_document_frequency"].to_pylist() == [1, 4]
-    assert liechtenstein_rows["fineweb_document_frequency"].to_pylist() == [4, 1]
+    assert monaco_rows["fineweb_document_frequency"].to_pylist() == [1, 4, 4, 4, 4]
+    assert liechtenstein_rows["fineweb_document_frequency"].to_pylist() == [
+        4,
+        4,
+        4,
+        1,
+        4,
+    ]
     assert monaco_rows.to_pylist() == [
         {
             "polygon_id": "monaco/way/10",
@@ -760,10 +734,51 @@ def test_run_direction2_v2_counts_and_gates_specificity(
             "matched_alias": "Central",
             "osm_tags": '{"name":"Central"}',
             "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "one",
+            "sentence": "Central appears without a country.",
+            "context": (
+                "The Palais du Prince is visible. Central appears without a country."
+            ),
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
+        {
+            "polygon_id": "monaco/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
             "fineweb_url": "two",
             "sentence": "Central in Monaco is a place.",
             "context": "Central in Monaco is a place.",
-            "name_match_class": "generic_name_with_country",
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
+        {
+            "polygon_id": "monaco/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "three",
+            "sentence": "Central in Liechtenstein is a place.",
+            "context": "Central in Liechtenstein is a place.",
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
+        {
+            "polygon_id": "monaco/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "four",
+            "sentence": "Central is here.",
+            "context": "Alps View is visible. Central is here.",
+            "name_match_class": "generic_name",
             "osm_polygon_count": 2,
             "fineweb_document_frequency": 4,
         },
@@ -775,10 +790,38 @@ def test_run_direction2_v2_counts_and_gates_specificity(
             "matched_alias": "Central",
             "osm_tags": '{"name":"Central"}',
             "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "one",
+            "sentence": "Central appears without a country.",
+            "context": (
+                "The Palais du Prince is visible. Central appears without a country."
+            ),
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
+        {
+            "polygon_id": "liechtenstein/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "two",
+            "sentence": "Central in Monaco is a place.",
+            "context": "Central in Monaco is a place.",
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
+        {
+            "polygon_id": "liechtenstein/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
             "fineweb_url": "three",
             "sentence": "Central in Liechtenstein is a place.",
             "context": "Central in Liechtenstein is a place.",
-            "name_match_class": "generic_name_with_country",
+            "name_match_class": "generic_name",
             "osm_polygon_count": 2,
             "fineweb_document_frequency": 4,
         },
@@ -795,17 +838,31 @@ def test_run_direction2_v2_counts_and_gates_specificity(
             "osm_polygon_count": 1,
             "fineweb_document_frequency": 1,
         },
+        {
+            "polygon_id": "liechtenstein/way/11",
+            "polygon_name": "Central",
+            "matched_alias": "Central",
+            "osm_tags": '{"name":"Central"}',
+            "centroid": '{"lat":43.704999995373186,"lon":7.404999999215664}',
+            "fineweb_url": "four",
+            "sentence": "Central is here.",
+            "context": "Alps View is visible. Central is here.",
+            "name_match_class": "generic_name",
+            "osm_polygon_count": 2,
+            "fineweb_document_frequency": 4,
+        },
     ]
 
     manifest = json.loads(config.manifest_path.read_text(encoding="utf-8"))
     assert manifest["direction"] == DIRECTION_V2_VERSION
-    assert manifest["results"]["matches_found"] == 4
+    assert manifest["results"]["matches_found"] == 10
     assert (
         json.loads(config.name_inventory_path.read_text(encoding="utf-8"))["status"]
         == "complete"
     )
     card = config.dataset_card_path.read_text(encoding="utf-8")
-    assert "generic-name noise" in card
+    assert "name specificity" in card
+    assert "source country appears independently" not in card
     assert "exact source country name" in card
     events = [
         json.loads(line)
@@ -825,7 +882,7 @@ def test_run_direction2_v2_counts_and_gates_specificity(
     assert events[2]["names_indexed"] == 4
     assert events[2]["frequency_pass_reused"] is False
     assert events[3]["docs_scanned"] == 4
-    assert events[4]["matches_found"] == 4
+    assert events[4]["matches_found"] == 10
     assert manifest == {
         "configuration": {
             **v2_pipeline._policy_record(),
@@ -839,8 +896,8 @@ def test_run_direction2_v2_counts_and_gates_specificity(
         "countries": {
             "liechtenstein": {
                 "distinctive_matches": 1,
-                "generic_matches": 1,
-                "matches_found": 2,
+                "generic_matches": 4,
+                "matches_found": 5,
                 "names_indexed": 2,
                 "output_path": str(config.output_dir / "liechtenstein.parquet"),
                 "polygons_read": 3,
@@ -851,8 +908,8 @@ def test_run_direction2_v2_counts_and_gates_specificity(
             },
             "monaco": {
                 "distinctive_matches": 1,
-                "generic_matches": 1,
-                "matches_found": 2,
+                "generic_matches": 4,
+                "matches_found": 5,
                 "names_indexed": 3,
                 "output_path": str(config.output_dir / "monaco.parquet"),
                 "polygons_read": 3,
@@ -887,8 +944,8 @@ def test_run_direction2_v2_counts_and_gates_specificity(
             ],
             "fineweb_docs_frequency_pass": 4,
             "fineweb_docs_match_pass": 4,
-            "generic_matches": 2,
-            "matches_found": 4,
+            "generic_matches": 8,
+            "matches_found": 10,
             "distinctive_matches": 2,
             "unique_polygons_matched": 4,
         },
@@ -1101,10 +1158,8 @@ def test_policy_record_is_a_stable_public_run_contract() -> None:
     assert v2_pipeline._policy_record() == {
         "fineweb_document_frequency_ratio": 0.001,
         "generic_osm_polygon_count_threshold": 1,
-        "generic_requires_country_in_same_sentence": True,
         "minimum_name_letters": 3,
         "normalization_version": "v1-nfkc-casefold-separators",
-        "short_single_token_max_letters": 8,
     }
 
 
@@ -1152,10 +1207,8 @@ def test_match_pass_requests_text_and_url_with_bounded_batches(
 
     monkeypatch.setattr(v2_pipeline.pq, "ParquetFile", FakeParquetFile)
     sources = (
-        v2_pipeline._V2Source("monaco", tmp_path / "monaco.osm", "Monaco"),
-        v2_pipeline._V2Source(
-            "liechtenstein", tmp_path / "liechtenstein.osm", "Liechtenstein"
-        ),
+        v2_pipeline._V2Source("monaco", tmp_path / "monaco.osm"),
+        v2_pipeline._V2Source("liechtenstein", tmp_path / "liechtenstein.osm"),
     )
     paths = tuple(tmp_path / f"{source.key}.parquet" for source in sources)
 
@@ -1231,67 +1284,6 @@ def test_record_match_separates_generic_and_distinctive_counts() -> None:
     assert result.polygon_ids == {"monaco/way/10"}
 
 
-def test_containing_span_rejects_the_end_boundary_with_a_stable_error() -> None:
-    with pytest.raises(ValueError) as error:
-        v2_pipeline._containing_span((v2_pipeline.SentenceSpan(0, 5),), 5)
-
-    assert str(error.value) == "match_start is outside the document sentences"
-
-
-def test_generic_match_uses_offsets_local_to_its_sentence() -> None:
-    polygon = PolygonRecord(
-        polygon_id="monaco/way/10",
-        source_key="monaco",
-        name="Central",
-        aliases=(),
-        tags=(),
-        centroid=None,
-    )
-    profiles = build_name_inventory(
-        (polygon,),
-        document_frequencies={"central": 1},
-        document_count=1000,
-        country_names={"monaco": "Monaco"},
-    )
-    text = "Lead sentence. Central in Monaco is a place."
-    match = V2NameMatcher.build(profiles).find(text)[0]
-    span = v2_pipeline.split_sentences(text)[1]
-
-    assert v2_pipeline._keep_match(
-        text,
-        span,
-        match,
-        country_matcher=AhoCorasickPatternMatcher.build(("Monaco",)),
-    )
-
-
-def test_generic_match_rejects_country_text_overlapping_the_name() -> None:
-    polygon = PolygonRecord(
-        polygon_id="monaco/way/10",
-        source_key="monaco",
-        name="Monaco Central",
-        aliases=(),
-        tags=(),
-        centroid=None,
-    )
-    profiles = build_name_inventory(
-        (polygon,),
-        document_frequencies={"monaco central": 2},
-        document_count=1000,
-        country_names={"monaco": "Monaco"},
-    )
-    text = "Lead sentence. Monaco Central is a place."
-    match = V2NameMatcher.build(profiles).find(text)[0]
-    span = v2_pipeline.split_sentences(text)[1]
-
-    assert not v2_pipeline._keep_match(
-        text,
-        span,
-        match,
-        country_matcher=AhoCorasickPatternMatcher.build(("Monaco",)),
-    )
-
-
 def test_as_text_maps_null_to_empty_text() -> None:
     assert v2_pipeline._as_text(None) == ""
     assert v2_pipeline._as_text(42) == "42"
@@ -1302,7 +1294,7 @@ def test_country_summaries_require_matching_source_and_output_counts(
 ) -> None:
     output = tmp_path / "result.parquet"
     output.write_bytes(b"result")
-    source = v2_pipeline._V2Source("monaco", tmp_path / "monaco.osm", "Monaco")
+    source = v2_pipeline._V2Source("monaco", tmp_path / "monaco.osm")
     polygons = (
         PolygonRecord("monaco/way/1", "monaco", "One", (), (), None),
         PolygonRecord("monaco/way/2", "monaco", "Two", (), (), None),
@@ -1532,7 +1524,6 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
             "fineweb_document_frequency_ratio": 0.001,
             "frequency_pass_reused": False,
             "minimum_name_letters": 3,
-            "short_single_token_max_letters": 8,
         },
         "countries": {
             "monaco": {
@@ -1571,7 +1562,7 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "---",
                 "# Direction 2 — lexical polygon candidates V2",
                 "",
-                "This version reduces generic-name noise while keeping the retrieval "
+                "This version measures name specificity while keeping the retrieval "
                 "lexical and deterministic.",
                 "",
                 "## Measured run",
@@ -1585,19 +1576,17 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "- 4 FineWeb documents in the matching pass",
                 "- 4 matches written",
                 "- 2 distinctive-name matches",
-                "- 2 generic-name matches with country",
+                "- 2 generic-name matches",
                 "- 4 unique polygons matched",
                 "",
                 "## Rule",
                 "",
                 "A name is discarded when it has no letters, fewer than three "
                 "alphabetic characters, or is the exact source country name. A name "
-                "is generic when it is reused by more than one OSM polygon, appears "
-                "in more than 0.1% of "
-                "FineWeb documents, or is one token with at most eight letters.",
+                "is generic when it is reused by more than one OSM polygon or appears "
+                "in more than 0.1% of FineWeb documents.",
                 "",
-                "Distinctive names are matched directly. Generic names are kept only "
-                "when the source country appears independently in the same sentence. "
+                "Distinctive and generic names are matched directly. "
                 "The URL is provenance only. There is no LLM, embedding, thematic "
                 "filter, tag "
                 "filter, deduplication, or geographic disambiguation.",
@@ -1606,7 +1595,6 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "",
                 "- FineWeb frequency ratio: 0.001",
                 "- Minimum alphabetic characters: 3",
-                "- Short single-token limit: 8",
                 "- Frequency inventory reused: False",
                 "",
                 "## Columns",
@@ -1621,7 +1609,7 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "| fineweb_url | FineWeb document URL |",
                 "| sentence | the sentence containing the match |",
                 "| context | the sentence plus one neighboring sentence on each side |",
-                "| name_match_class | distinctive_name or generic_name_with_country |",
+                "| name_match_class | distinctive_name or generic_name |",
                 "| osm_polygon_count | number of OSM polygons "
                 "using the normalized name |",
                 "| fineweb_document_frequency | FineWeb documents "
@@ -1629,7 +1617,7 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "",
                 "## Source splits",
                 "",
-                "| Source | Matches | Distinctive | Generic with country |",
+                "| Source | Matches | Distinctive | Generic |",
                 "| --- | ---: | ---: | ---: |",
                 "| liechtenstein | 2 | 1 | 1 |",
                 "| monaco | 2 | 1 | 1 |",
@@ -1638,7 +1626,7 @@ def test_v2_dataset_card_has_a_stable_complete_contract() -> None:
                 "The full "
                 "contract is in the GitHub V2 README at "
                 "https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/"
-                "lexical-candidates/lexical-v2/README.md. The original Direction 2 V1 "
+                "lexical-candidates/v2/README.md. The original Direction 2 V1 "
                 "README remains available.",
             ]
         )

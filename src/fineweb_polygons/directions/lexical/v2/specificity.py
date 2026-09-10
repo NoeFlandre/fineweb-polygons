@@ -11,7 +11,6 @@ from fineweb_polygons.core.normalization import normalize_for_search
 from fineweb_polygons.directions.lexical.models import PolygonRecord
 
 FINEWEB_DOCUMENT_FREQUENCY_RATIO = 0.001
-SHORT_SINGLE_TOKEN_MAX_LETTERS = 8
 MIN_NAME_LETTERS = 3
 NameDecisionType = Literal["discard", "generic", "distinctive"]
 
@@ -213,8 +212,6 @@ def classify_name(
             polygon_count=polygon_count,
             document_frequency=document_frequency,
             frequency_cutoff=frequency_cutoff,
-            token_count=token_count,
-            letter_count=letter_count,
         )
     )
     decision: NameDecisionType
@@ -262,15 +259,11 @@ def _generic_reason(
     polygon_count: int,
     document_frequency: int,
     frequency_cutoff: int,
-    token_count: int,
-    letter_count: int,
 ) -> str | None:
     if polygon_count > 1:
         return "osm_reuse"
     if document_frequency > frequency_cutoff:
         return "fineweb_frequency"
-    if token_count == 1 and letter_count <= SHORT_SINGLE_TOKEN_MAX_LETTERS:
-        return "short_single_token"
     return None
 
 

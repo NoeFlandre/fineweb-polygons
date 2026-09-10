@@ -101,8 +101,8 @@ The version ID is part of the public contract. Existing version IDs are not sile
 [Direction 2 documentation](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
 is a separate lexical POC, not V11. V1 is the broad lexical baseline. V2 keeps
 the same all-area inventory and Aho–Corasick matcher, but first measures name
-reuse in OSM and document frequency in FineWeb, then gates generic names with
-the source country in the same sentence. Each version has its own standalone
+reuse in OSM and document frequency in FineWeb, then applies those measurable
+specificity rules without a sentence-level country gate. Each version has its own standalone
 card, inventory/manifest, code path, and HF configuration under
 `data/direction-2-lexical/` and `metadata/direction-2-lexical/`.
 

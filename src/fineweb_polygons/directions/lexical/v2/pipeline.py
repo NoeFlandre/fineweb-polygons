@@ -34,7 +34,6 @@ from fineweb_polygons.directions.lexical.v2.card import render_dataset_card
 from fineweb_polygons.directions.lexical.v2.matching import (
     V2NameMatch,
     V2NameMatcher,
-    has_independent_country_match,
 )
 from fineweb_polygons.directions.lexical.v2.models import (
     COUNTRY_NAMES,
@@ -66,7 +65,6 @@ _OUTPUT_SCHEMA = pa.schema(
 class _V2Source:
     key: str
     path: Path
-    country_name: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +93,7 @@ class _ScanResult:
 
 
 def run_direction2_v2(config: Direction2V2RunConfig) -> Direction2V2RunSummary:
-    """Run the V2 frequency pass and country-gated retrieval pass."""
+    """Run the V2 frequency pass and specificity-aware retrieval pass."""
     _validate_inputs(config)
     sources = _sources(config)
     output_paths = tuple(
@@ -187,12 +185,8 @@ def run_direction2_v2(config: Direction2V2RunConfig) -> Direction2V2RunSummary:
 
 def _sources(config: Direction2V2RunConfig) -> tuple[_V2Source, ...]:
     return (
-        _V2Source("monaco", config.monaco_pbf, COUNTRY_NAMES["monaco"]),
-        _V2Source(
-            "liechtenstein",
-            config.liechtenstein_pbf,
-            COUNTRY_NAMES["liechtenstein"],
-        ),
+        _V2Source("monaco", config.monaco_pbf),
+        _V2Source("liechtenstein", config.liechtenstein_pbf),
     )
 
 
@@ -226,10 +220,8 @@ def _policy_record() -> dict[str, object]:
     return {
         "fineweb_document_frequency_ratio": 0.001,
         "generic_osm_polygon_count_threshold": 1,
-        "generic_requires_country_in_same_sentence": True,
         "minimum_name_letters": 3,
         "normalization_version": NORMALIZATION_VERSION,
-        "short_single_token_max_letters": 8,
     }
 
 
@@ -397,10 +389,6 @@ def _scan_matches(
     parquet_file = pq.ParquetFile(shard_path)
     _require_columns(parquet_file)
     matcher = V2NameMatcher.build(profiles)
-    country_matchers = {
-        source.key: AhoCorasickPatternMatcher.build((source.country_name,))
-        for source in sources
-    }
     result = _ScanResult()
     with _ParquetOutputs(
         tuple(source.key for source in sources),
@@ -415,7 +403,6 @@ def _scan_matches(
             _scan_batch(
                 batch,
                 matcher=matcher,
-                country_matchers=country_matchers,
                 outputs=outputs,
                 result=result,
             )
@@ -440,7 +427,6 @@ def _scan_batch(
     batch: Any,
     *,
     matcher: V2NameMatcher,
-    country_matchers: Mapping[str, AhoCorasickPatternMatcher],
     outputs: _ParquetOutputs,
     result: _ScanResult,
 ) -> None:
@@ -452,7 +438,6 @@ def _scan_batch(
             _as_text(text_column[index].as_py()),
             _as_text(url_column[index].as_py()),
             matcher=matcher,
-            country_matchers=country_matchers,
             outputs=outputs,
             result=result,
         )
@@ -463,7 +448,6 @@ def _scan_document(
     url: str,
     *,
     matcher: V2NameMatcher,
-    country_matchers: Mapping[str, AhoCorasickPatternMatcher],
     outputs: _ParquetOutputs,
     result: _ScanResult,
 ) -> None:
@@ -472,15 +456,14 @@ def _scan_document(
         return
     spans = split_sentences(text)
     for match in matches:
-        if _write_document_match(
+        _write_document_match(
             text,
             url,
             spans,
             match,
-            country_matchers=country_matchers,
             outputs=outputs,
-        ):
-            _record_match(result, match)
+        )
+        _record_match(result, match)
 
 
 def _write_document_match(
@@ -489,20 +472,14 @@ def _write_document_match(
     spans: tuple[SentenceSpan, ...],
     match: V2NameMatch,
     *,
-    country_matchers: Mapping[str, AhoCorasickPatternMatcher],
     outputs: _ParquetOutputs,
-) -> bool:
-    span = _containing_span(spans, match.start)
-    country_matcher = country_matchers[match.candidate.polygon.source_key]
-    if not _keep_match(text, span, match, country_matcher=country_matcher):
-        return False
+) -> None:
     outputs.add(
         match.candidate.polygon.source_key,
         _match_row(text, url, spans, match),
         match.candidate.polygon.polygon_id,
         match.profile.decision.decision,
     )
-    return True
 
 
 def _record_match(result: _ScanResult, match: V2NameMatch) -> None:
@@ -512,34 +489,6 @@ def _record_match(result: _ScanResult, match: V2NameMatch) -> None:
         result.generic_matches += 1
     else:
         result.distinctive_matches += 1
-
-
-def _containing_span(
-    spans: tuple[SentenceSpan, ...],
-    match_start: int,
-) -> SentenceSpan:
-    for span in spans:
-        if span.start <= match_start < span.end:
-            return span
-    raise ValueError("match_start is outside the document sentences")
-
-
-def _keep_match(
-    text: str,
-    span: SentenceSpan,
-    match: V2NameMatch,
-    *,
-    country_matcher: AhoCorasickPatternMatcher,
-) -> bool:
-    if match.profile.decision.decision == "distinctive":
-        return True
-    sentence = text[span.start : span.end]
-    country_matches = country_matcher.find(sentence)
-    return has_independent_country_match(
-        country_matches,
-        name_start=match.start - span.start,
-        name_end=match.end - span.start,
-    )
 
 
 def _match_row(
@@ -552,9 +501,7 @@ def _match_row(
     profile = match.profile
     polygon = match.candidate.polygon
     match_class = (
-        "generic_name_with_country"
-        if profile.decision.decision == "generic"
-        else "distinctive_name"
+        "generic_name" if profile.decision.decision == "generic" else "distinctive_name"
     )
     return {
         "polygon_id": polygon.polygon_id,

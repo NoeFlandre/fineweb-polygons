@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from fineweb_polygons.directions.lexical.matching import (
     AhoCorasickPatternMatcher,
-    PatternMatch,
 )
 from fineweb_polygons.directions.lexical.v2.specificity import (
     NameCandidate,
@@ -81,15 +80,3 @@ class V2NameMatcher:
                 ),
             )
         )
-
-
-def has_independent_country_match(
-    country_matches: Iterable[PatternMatch],
-    *,
-    name_start: int,
-    name_end: int,
-) -> bool:
-    """Return whether a country match exists outside the name span."""
-    return any(
-        match.end <= name_start or match.start >= name_end for match in country_matches
-    )

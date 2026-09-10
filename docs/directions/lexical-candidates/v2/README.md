@@ -24,14 +24,16 @@ The first run used the complete 1,048,581-document FineWeb shard.
 
 | Source | Polygons read | Names indexed | Matches | Unique polygons |
 | --- | ---: | ---: | ---: | ---: |
-| Monaco | 2,341 | 908 | 3,184 | 120 |
-| Liechtenstein | 24,800 | 647 | 1,558 | 33 |
-| **Total** | **27,141** | **1,555** | **4,742** | **153** |
+| Monaco | 2,341 | 908 | 34,108 | 144 |
+| Liechtenstein | 24,800 | 647 | 168,210 | 73 |
+| **Total** | **27,141** | **1,555** | **202,318** | **217** |
 
 Across both sources, V2 considered 1,578 normalized names, discarded 23,
-classified 215 as generic, and wrote 4,542 distinctive-name matches plus 200
-generic-name matches with country evidence. V1 wrote 29,226,160 matches on the
-same shard, so V2 reduced the lexical candidate volume by about 99.98%.
+classified 116 as generic (108 because of OSM reuse and 8 because of FineWeb
+frequency), and wrote 9,426 distinctive-name matches plus 192,892 generic-name
+matches. Generic matches are intentionally not country-gated in this V2 rule;
+the result is therefore a broad lexical candidate pool, not a high-confidence
+retrieval set.
 
 ## Polygon inventory
 
@@ -51,10 +53,10 @@ counter is part of the saved audit record):
 1. how many distinct OSM polygons use it;
 2. how many FineWeb documents contain it, counted once per document.
 
-A name is generic when it is reused by multiple OSM polygons, appears in more
-than 0.1% of the FineWeb documents, or is a single token of at most eight
-letters. All remaining names are distinctive. These decisions and counts are
-saved in the name inventory so the run can be audited and resumed.
+A name is generic when it is reused by multiple OSM polygons or appears in more
+than 0.1% of the FineWeb documents. All remaining names are distinctive. These
+decisions and counts are saved in the name inventory so the run can be audited
+and resumed.
 
 ## Document matching
 
@@ -64,8 +66,7 @@ the document `text` only. URL text is retained as provenance and is not a
 selection condition.
 
 - A distinctive name keeps every boundary-aware mention.
-- A generic name keeps a mention only when the source country name appears
-  independently in the same sentence.
+- A generic name also keeps every boundary-aware mention.
 
 The output has one row per accepted polygon/name mention. Each row contains
 the matching sentence and up to one sentence on either side, plus the polygon
@@ -82,6 +83,7 @@ deduplication, or geographic disambiguation.
 - name inventory: `metadata/direction-2-lexical/v2/name-inventory.json`
 
 The exact measured counts and SHA-256 hashes are generated from the run and
-written into the dataset card and manifest.
+written into the dataset card and manifest. The current output contains
+202,318 rows; the previous V2 policy produced 4,742 rows on the same shard.
 
 Implementation: [`src/fineweb_polygons/directions/lexical/`](https://github.com/NoeFlandre/fineweb-polygons/tree/main/src/fineweb_polygons/direction2).
