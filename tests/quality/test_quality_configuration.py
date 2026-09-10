@@ -9,6 +9,9 @@ import pytest
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW_PATH = _REPOSITORY_ROOT / ".github" / "workflows" / "quality.yml"
+_JUSTFILE_PATH = _REPOSITORY_ROOT / "justfile"
+_MKDOCS_PATH = _REPOSITORY_ROOT / "mkdocs.yml"
+_PYPROJECT_PATH = _REPOSITORY_ROOT / "pyproject.toml"
 _SEAGATE_ROOT = "/Volumes/Seagate M3/projects/fineweb-polygons"
 
 
@@ -55,7 +58,48 @@ def test_coverage_accepts_workspace_paths_for_ci(tmp_path: Path) -> None:
     assert _has_config_value(output, "json_output", str(tmp_path / "coverage.json"))
 
 
-def test_manual_mutation_workflow_runs_the_fail_closed_gate() -> None:
+def test_justfile_has_one_configurable_data_root() -> None:
+    justfile = _JUSTFILE_PATH.read_text(encoding="utf-8")
+
+    assert (
+        f'data_root := env_var_or_default("FINEWEB_POLYGONS_DATA_ROOT", "{_SEAGATE_ROOT}")'
+        in justfile
+    )
+    assert justfile.count(_SEAGATE_ROOT) == 1
+    assert "cache/uv-cleanup" not in justfile
+    assert ".venvs/fineweb-polygons-v8" not in justfile
+    assert 'uv build --out-dir "{{ data_root }}/dist"' in justfile
+    assert (
+        "qa: format-check lint typecheck catalog-check crap docs package"
+        in justfile
+    )
+
+
+def test_source_distribution_has_an_explicit_allowlist() -> None:
+    pyproject = _PYPROJECT_PATH.read_text(encoding="utf-8")
+
+    assert "[tool.hatch.build.targets.sdist]" in pyproject
+    assert "only-include = [" in pyproject
+    assert "\"src\"" in pyproject
+    assert "\"README.md\"" in pyproject
+    assert "\"LICENSE\"" in pyproject
+
+
+def test_coverage_has_a_high_minimum_threshold() -> None:
+    pyproject = _PYPROJECT_PATH.read_text(encoding="utf-8")
+
+    assert "[tool.coverage.report]" in pyproject
+    assert "fail_under = 98" in pyproject
+
+
+def test_mkdocs_default_site_directory_is_portable() -> None:
+    mkdocs = _MKDOCS_PATH.read_text(encoding="utf-8")
+
+    assert "site_dir: site" in mkdocs
+    assert _SEAGATE_ROOT not in mkdocs
+
+
+def test_mutation_workflow_runs_the_fail_closed_gate() -> None:
     if not _WORKFLOW_PATH.is_file():
         pytest.skip("GitHub workflow is unavailable in a mutation checkout")
 
@@ -66,6 +110,14 @@ def test_manual_mutation_workflow_runs_the_fail_closed_gate() -> None:
     assert mutation_run in workflow
     assert mutation_gate in workflow
     assert workflow.index(mutation_run) < workflow.index(mutation_gate)
+    mutation_job = workflow[workflow.index("  mutation:") :]
+    assert "if:" not in mutation_job
+
+
+def test_quality_workflow_builds_the_package() -> None:
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "uv build --out-dir" in workflow
 
 
 def test_quality_workflow_exposes_repository_import_paths() -> None:
@@ -81,3 +133,14 @@ def test_quality_workflow_writes_docs_to_runner_workspace() -> None:
         '- run: uv run mkdocs build --strict --site-dir "${{ github.workspace }}/site"'
         in workflow
     )
+
+
+def test_mutation_checkout_copies_justfile() -> None:
+    pyproject = _PYPROJECT_PATH.read_text(encoding="utf-8")
+
+    also_copy = next(
+        line for line in pyproject.splitlines() if line.startswith("also_copy = ")
+    )
+    assert "\"justfile\"" in also_copy
+    assert "\"README.md\"" in also_copy
+    assert "\"tests/\"" in also_copy

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, TypeGuard, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, TypeGuard
 
 import osmium
 from osmium.geom import GeoJSONFactory
@@ -23,8 +23,8 @@ def read_polygon_records(sources: Sequence[PolygonSource]) -> tuple[PolygonRecor
 def _read_source(source: PolygonSource) -> tuple[PolygonRecord, ...]:
     factory = GeoJSONFactory()
     records: list[PolygonRecord] = []
-    entities = osmium.FileProcessor(str(source.path)).with_areas()
-    for area in cast(Iterator[Any], entities):
+    entities: Any = osmium.FileProcessor(str(source.path)).with_areas()
+    for area in entities:
         if not area.is_area():
             continue
         records.append(_area_record(source, area, factory))
@@ -149,7 +149,9 @@ def _ring_moment(
     if len(points) < 3:
         return 0.0, 0.0, 0.0
     area, longitude, latitude = _ring_centroid(points)
-    weight = abs(area) * (1.0 if is_outer else -1.0)
+    weight = abs(area)
+    if not is_outer:
+        weight = -weight
     return weight, longitude * weight, latitude * weight
 
 
@@ -157,7 +159,8 @@ def _ring_centroid(points: Sequence[tuple[float, float]]) -> tuple[float, float,
     cross_sum = 0.0
     longitude_sum = 0.0
     latitude_sum = 0.0
-    for first, second in zip(points, (*points[1:], points[0]), strict=True):
+    for index, first in enumerate(points):
+        second = points[index + 1] if index + 1 < len(points) else points[0]
         cross = first[0] * second[1] - second[0] * first[1]
         cross_sum += cross
         longitude_sum += (first[0] + second[0]) * cross

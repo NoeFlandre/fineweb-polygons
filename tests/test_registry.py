@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,6 +26,29 @@ def test_every_direction_and_version_identifier_is_unique() -> None:
     assert len(set(version_ids)) == len(version_ids)
     assert len(set(configs)) == len(configs)
     assert len(set(prefixes)) == len(prefixes)
+
+
+def test_registry_import_does_not_initialize_pipeline_dependencies() -> None:
+    source_root = _REPOSITORY_ROOT / "src"
+    environment = {**os.environ, "PYTHONPATH": str(source_root)}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; import fineweb_polygons.registry; "
+                "assert 'pyarrow' not in sys.modules; "
+                "assert 'wtpsplit' not in sys.modules"
+            ),
+        ],
+        check=False,
+        cwd=_REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("direction", DIRECTIONS, ids=lambda d: d.id)
@@ -124,3 +150,68 @@ def test_huggingface_configs_match_the_registry() -> None:
     assert [entry["config_name"] for entry in configs] == [
         version.hf_config for direction in DIRECTIONS for version in direction.versions
     ]
+
+
+def test_lexical_facade_loads_legacy_exports_lazily() -> None:
+    from fineweb_polygons.directions import lexical
+    from fineweb_polygons.directions.lexical.v1.models import (
+        DIRECTION_VERSION,
+        Direction2RunConfig,
+    )
+
+    assert lexical.DIRECTION_VERSION == DIRECTION_VERSION
+    assert lexical.Direction2RunConfig is Direction2RunConfig
+    assert callable(lexical.run_direction2)
+
+
+def test_lexical_facade_rejects_unknown_exports() -> None:
+    from fineweb_polygons.directions import lexical
+
+    unknown_name = "not_an_export"
+    with pytest.raises(AttributeError, match="no attribute"):
+        getattr(lexical, unknown_name)
+
+
+def test_retrieval_facade_rejects_unknown_exports() -> None:
+    from fineweb_polygons.directions import retrieval
+
+    unknown_name = "not_an_export"
+    with pytest.raises(
+        AttributeError,
+        match=r"module 'fineweb_polygons\.directions\.retrieval' has no attribute",
+    ):
+        getattr(retrieval, unknown_name)
+
+
+def test_lazy_runner_imports_and_forwards_config(monkeypatch) -> None:
+    import_calls: list[str | None] = []
+    received: list[object] = []
+
+    class FakeModule:
+        @staticmethod
+        def execute(config: object) -> object:
+            received.append(config)
+            return config
+
+    def fake_import(module_name: str | None) -> FakeModule:
+        import_calls.append(module_name)
+        return FakeModule()
+
+    monkeypatch.setattr(registry, "import_module", fake_import)
+    config = object()
+    runner = registry._lazy_runner("example.module", "execute")
+
+    assert runner(config) is config
+    assert import_calls == ["example.module"]
+    assert received == [config]
+
+
+def test_each_direction_facade_resolves_and_caches_its_declared_exports() -> None:
+    from fineweb_polygons.directions import lexical, retrieval
+
+    for facade in (lexical, retrieval):
+        for name in tuple(facade._LAZY_EXPORTS):
+            facade.__dict__.pop(name, None)
+            value = getattr(facade, name)
+            assert value is not None
+            assert getattr(facade, name) is value

@@ -302,6 +302,7 @@ def _resolved_paths(
     )
     # pragma: no mutate start
     return cast(tuple[Path, Path, Path, Path, Path, Path], resolved)
+    # pragma: no mutate end
 
 
 def _validate_distinct_paths(
@@ -920,6 +921,7 @@ def _summary_counts(
         return None
     # pragma: no mutate start
     return cast(tuple[int, int, int, int, int, int], values)
+    # pragma: no mutate end
 
 
 def _nested_string(manifest: Mapping[str, object], key: str, nested_key: str) -> str:

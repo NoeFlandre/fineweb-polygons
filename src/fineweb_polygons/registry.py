@@ -15,13 +15,23 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fineweb_polygons.core.foundation import ProjectPaths, validate_data_path
-from fineweb_polygons.directions import lexical, retrieval
 from fineweb_polygons.directions.lexical.v1 import models as lexical_v1
 from fineweb_polygons.directions.lexical.v2 import models as lexical_v2
+from fineweb_polygons.directions.retrieval.stages.inference import (
+    V10_MAX_NEW_TOKENS,
+)
+
+if TYPE_CHECKING:
+    from fineweb_polygons.directions.retrieval.runs import ScanRunConfig
+    from fineweb_polygons.directions.retrieval.stages.v7 import V7RunConfig
+    from fineweb_polygons.directions.retrieval.stages.v8 import V8RunConfig
+    from fineweb_polygons.directions.retrieval.stages.v9 import V9RunConfig
+    from fineweb_polygons.directions.retrieval.stages.v10 import V10RunConfig
 
 DATASET_REPOSITORY = "NoeFlandre/fineweb-polygons"
 
@@ -334,9 +344,9 @@ _LEXICAL_ARGUMENTS = (
 )
 
 
-def _scan_config(
-    parsed: argparse.Namespace, paths: ProjectPaths
-) -> retrieval.ScanRunConfig:
+def _scan_config(parsed: argparse.Namespace, paths: ProjectPaths) -> ScanRunConfig:
+    from fineweb_polygons.directions import retrieval
+
     return retrieval.ScanRunConfig(
         paths=paths,
         pbf_path=parsed.pbf or paths.raw_dir / "monaco-latest.osm.pbf",
@@ -348,9 +358,9 @@ def _scan_config(
     )
 
 
-def _v7_config(
-    parsed: argparse.Namespace, paths: ProjectPaths
-) -> retrieval.V7RunConfig:
+def _v7_config(parsed: argparse.Namespace, paths: ProjectPaths) -> V7RunConfig:
+    from fineweb_polygons.directions import retrieval
+
     return retrieval.V7RunConfig(
         input_path=validate_data_path(paths, parsed.input),
         output_path=validate_data_path(paths, parsed.output),
@@ -360,9 +370,9 @@ def _v7_config(
     )
 
 
-def _v8_config(
-    parsed: argparse.Namespace, paths: ProjectPaths
-) -> retrieval.V8RunConfig:
+def _v8_config(parsed: argparse.Namespace, paths: ProjectPaths) -> V8RunConfig:
+    from fineweb_polygons.directions import retrieval
+
     return retrieval.V8RunConfig(
         input_path=validate_data_path(paths, parsed.input),
         output_path=validate_data_path(paths, parsed.output),
@@ -371,9 +381,9 @@ def _v8_config(
     )
 
 
-def _v9_config(
-    parsed: argparse.Namespace, paths: ProjectPaths
-) -> retrieval.V9RunConfig:
+def _v9_config(parsed: argparse.Namespace, paths: ProjectPaths) -> V9RunConfig:
+    from fineweb_polygons.directions import retrieval
+
     return retrieval.V9RunConfig(
         input_path=validate_data_path(paths, parsed.input),
         output_path=validate_data_path(paths, parsed.output),
@@ -382,9 +392,9 @@ def _v9_config(
     )
 
 
-def _v10_config(
-    parsed: argparse.Namespace, paths: ProjectPaths
-) -> retrieval.V10RunConfig:
+def _v10_config(parsed: argparse.Namespace, paths: ProjectPaths) -> V10RunConfig:
+    from fineweb_polygons.directions import retrieval
+
     return retrieval.V10RunConfig(
         input_path=validate_data_path(paths, parsed.input),
         output_path=validate_data_path(paths, parsed.output),
@@ -441,22 +451,33 @@ def _lexical_defaults(
 
 def _lexical_v1_config(
     parsed: argparse.Namespace, paths: ProjectPaths
-) -> lexical.Direction2RunConfig:
-    return lexical.Direction2RunConfig(
+) -> lexical_v1.Direction2RunConfig:
+    return lexical_v1.Direction2RunConfig(
         **_lexical_defaults(parsed, paths, "direction-2/lexical-v1")
     )
 
 
 def _lexical_v2_config(
     parsed: argparse.Namespace, paths: ProjectPaths
-) -> lexical.Direction2V2RunConfig:
+) -> lexical_v2.Direction2V2RunConfig:
     slug = "direction-2/lexical-v2"
-    return lexical.Direction2V2RunConfig(
+    return lexical_v2.Direction2V2RunConfig(
         **_lexical_defaults(parsed, paths, slug),
         name_inventory_path=_lexical_path(
             paths, parsed.name_inventory, paths.runs_dir / slug / "name-inventory.json"
         ),
     )
+
+
+def _lazy_runner(module_name: str, function_name: str) -> Callable[[Any], Any]:
+    """Return a command runner that imports its implementation on demand."""
+
+    def run(config: Any) -> Any:
+        module = import_module(module_name)
+        runner = getattr(module, function_name)
+        return runner(config)
+
+    return run
 
 
 COMMANDS: tuple[Command, ...] = (
@@ -478,7 +499,9 @@ COMMANDS: tuple[Command, ...] = (
             ),
         ),
         build_config=_scan_config,
-        runner=retrieval.execute_run,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.retrieval.runs", "execute_run"
+        ),
         runner_keyword="runner",
         requires_external_root=False,
         errors=(FileNotFoundError, OSError, ValueError),
@@ -494,7 +517,9 @@ COMMANDS: tuple[Command, ...] = (
             Argument("--model-id", {"choices": ("sat-3l-sm",), "default": "sat-3l-sm"}),
         ),
         build_config=_v7_config,
-        runner=retrieval.run_v7,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.retrieval.stages.v7", "run_v7"
+        ),
         runner_keyword="v7_runner",
     ),
     Command(
@@ -507,7 +532,9 @@ COMMANDS: tuple[Command, ...] = (
             Argument("--vocabulary", {"type": Path, "required": True}),
         ),
         build_config=_v8_config,
-        runner=retrieval.run_v8,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.retrieval.stages.v8", "run_v8"
+        ),
         runner_keyword="v8_runner",
     ),
     Command(
@@ -520,7 +547,9 @@ COMMANDS: tuple[Command, ...] = (
             Argument("--vocabulary", {"type": Path, "required": True}),
         ),
         build_config=_v9_config,
-        runner=retrieval.run_v9,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.retrieval.stages.v9", "run_v9"
+        ),
         runner_keyword="v9_runner",
     ),
     Command(
@@ -536,11 +565,13 @@ COMMANDS: tuple[Command, ...] = (
             Argument("--batch-size", {"type": int, "default": 8}),
             Argument(
                 "--max-new-tokens",
-                {"type": int, "default": retrieval.V10_MAX_NEW_TOKENS},
+                {"type": int, "default": V10_MAX_NEW_TOKENS},
             ),
         ),
         build_config=_v10_config,
-        runner=retrieval.run_v10,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.retrieval.stages.v10", "run_v10"
+        ),
         runner_keyword="v10_runner",
     ),
     Command(
@@ -550,7 +581,9 @@ COMMANDS: tuple[Command, ...] = (
         produces=("direction-2-lexical-v1",),
         arguments=_LEXICAL_ARGUMENTS,
         build_config=_lexical_v1_config,
-        runner=lexical.run_direction2,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.lexical.v1.pipeline", "run_direction2"
+        ),
         runner_keyword="direction2_runner",
     ),
     Command(
@@ -563,7 +596,9 @@ COMMANDS: tuple[Command, ...] = (
             Argument("--name-inventory", {"type": Path}),
         ),
         build_config=_lexical_v2_config,
-        runner=lexical.run_direction2_v2,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.lexical.v2.pipeline", "run_direction2_v2"
+        ),
         runner_keyword="direction2_v2_runner",
     ),
 )

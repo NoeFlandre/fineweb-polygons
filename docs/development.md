@@ -3,8 +3,9 @@
 ## Setup
 
 ```bash
-export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-cleanup"
-export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v8"
+export FINEWEB_POLYGONS_DATA_ROOT="${FINEWEB_POLYGONS_DATA_ROOT:-/Volumes/Seagate M3/projects/fineweb-polygons}"
+export UV_CACHE_DIR="$FINEWEB_POLYGONS_DATA_ROOT/cache/uv"
+export UV_PROJECT_ENVIRONMENT="$FINEWEB_POLYGONS_DATA_ROOT/.venv"
 uv sync --locked
 uv run pre-commit install
 ```
@@ -33,19 +34,19 @@ artifact.
 The first V1 input is FineWeb's `sample/10BT/000_00000.parquet` shard. Keep the Hugging Face cache on the Seagate and download only that file:
 
 ```bash
-export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
+export HF_HUB_CACHE="$FINEWEB_POLYGONS_DATA_ROOT/cache/huggingface-v7/hub"
 hf download HuggingFaceFW/fineweb \
   --repo-type dataset \
   --include "sample/10BT/000_00000.parquet" \
-  --local-dir "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb"
+  --local-dir "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb"
 ```
 
 Run the resumable scan with:
 
 ```bash
 uv run fineweb-polygons scan \
-  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --pbf "$FINEWEB_POLYGONS_DATA_ROOT/raw/monaco-latest.osm.pbf" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v1-10bt-000-v3
 ```
 
@@ -59,15 +60,15 @@ Use retrieval version v5 with the relevant country name:
 
 ```bash
 uv run fineweb-polygons scan \
-  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --pbf "$FINEWEB_POLYGONS_DATA_ROOT/raw/monaco-latest.osm.pbf" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v5-monaco-10bt-000-v3 \
   --retrieval-version v5 \
   --country-name "Monaco"
 
 uv run fineweb-polygons scan \
-  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --pbf "$FINEWEB_POLYGONS_DATA_ROOT/raw/liechtenstein-latest.osm.pbf" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v5-liechtenstein-10bt-000-v2 \
   --retrieval-version v5 \
   --country-name "Liechtenstein"
@@ -85,15 +86,15 @@ Run V6 with the same country-specific inputs and a distinct run ID:
 
 ```bash
 uv run fineweb-polygons scan \
-  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/monaco-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --pbf "$FINEWEB_POLYGONS_DATA_ROOT/raw/monaco-latest.osm.pbf" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v6-monaco-10bt-000-v1 \
   --retrieval-version v6 \
   --country-name "Monaco"
 
 uv run fineweb-polygons scan \
-  --pbf "/Volumes/Seagate M3/projects/fineweb-polygons/raw/liechtenstein-latest.osm.pbf" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet" \
+  --pbf "$FINEWEB_POLYGONS_DATA_ROOT/raw/liechtenstein-latest.osm.pbf" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet" \
   --run-id v6-liechtenstein-10bt-000-v1 \
   --retrieval-version v6 \
   --country-name "Liechtenstein"
@@ -113,14 +114,14 @@ V7 is a post-processing step over the two V6 artifacts. Install the locked
 `wtpsplit[onnx-cpu]` dependency and keep the model cache on the Seagate:
 
 ```bash
-export HF_HUB_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/hub"
-export TRANSFORMERS_CACHE="/Volumes/Seagate M3/projects/fineweb-polygons/cache/huggingface-v7/transformers"
+export HF_HUB_CACHE="$FINEWEB_POLYGONS_DATA_ROOT/cache/huggingface-v7/hub"
+export TRANSFORMERS_CACHE="$FINEWEB_POLYGONS_DATA_ROOT/cache/huggingface-v7/transformers"
 
 uv run fineweb-polygons segment-v7 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v6-monaco-10bt-000-v1-matches.jsonl" \
-  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
-  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v7-monaco-10bt-000-v1/manifest.json"
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v6-monaco-10bt-000-v1-matches.jsonl" \
+  --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v7-monaco-10bt-000-v1/manifest.json"
 ```
 
 Repeat the command with the Liechtenstein V6 input and V7 output paths. The
@@ -139,11 +140,11 @@ is used for both countries, and the full V7 row is preserved.
 
 ```bash
 uv run fineweb-polygons filter-v8 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
-  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
-  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v8-monaco-10bt-000-v1/manifest.json" \
-  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v7-monaco-10bt-000-v1-sentences.jsonl" \
+  --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
+  --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v8-monaco-10bt-000-v1/manifest.json" \
+  --vocabulary "$FINEWEB_POLYGONS_DATA_ROOT/v8-topic-vocabulary-v1.json"
 ```
 
 Repeat with the Liechtenstein V7 input and V8 output paths. A matching
@@ -160,8 +161,8 @@ progress log, a run manifest, and a deterministic card under the Seagate root:
 
 ```bash
 uv run fineweb-polygons direction2-lexical-v2 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --shard "/Volumes/Seagate M3/projects/fineweb-polygons/raw/fineweb/sample/10BT/000_00000.parquet"
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --shard "$FINEWEB_POLYGONS_DATA_ROOT/raw/fineweb/sample/10BT/000_00000.parquet"
 ```
 
 The defaults read `raw/monaco-latest.osm.pbf` and
@@ -188,18 +189,18 @@ version 4 removes the redundant `context_fields`, `context_phrase`,
 
 ```bash
 uv run fineweb-polygons filter-v9 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
-  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
-  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v9-monaco-10bt-000-v1/manifest.json" \
-  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v8-monaco-10bt-000-v1-topic.jsonl" \
+  --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
+  --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v9-monaco-10bt-000-v1/manifest.json" \
+  --vocabulary "$FINEWEB_POLYGONS_DATA_ROOT/v8-topic-vocabulary-v1.json"
 
 uv run fineweb-polygons filter-v9 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v8-liechtenstein-10bt-000-v1-topic.jsonl" \
-  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-liechtenstein-10bt-000-v1-topic-sentences.jsonl" \
-  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v9-liechtenstein-10bt-000-v1/manifest.json" \
-  --vocabulary "/Volumes/Seagate M3/projects/fineweb-polygons/v8-topic-vocabulary-v1.json"
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v8-liechtenstein-10bt-000-v1-topic.jsonl" \
+  --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v9-liechtenstein-10bt-000-v1-topic-sentences.jsonl" \
+  --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v9-liechtenstein-10bt-000-v1/manifest.json" \
+  --vocabulary "$FINEWEB_POLYGONS_DATA_ROOT/v8-topic-vocabulary-v1.json"
 ```
 
 V9 keeps a sentence only when it has a whole-word topic match and the polygon
@@ -212,21 +213,21 @@ metadata list is aligned with `sentences_with_topic_term` by position.
 
 V10 reads the V9 `sentences_with_topic_term` lists and classifies every
 candidate sentence with the local `LiquidAI/LFM2.5-2.6B` model. On Apple
-Silicon, use the Seagate-derived q4 MLX runtime and the dedicated Seagate uv
+Silicon, use the Seagate-derived q4 MLX runtime and the shared Seagate uv
 environment:
 
 ```bash
-export UV_CACHE_DIR="/Volumes/Seagate M3/projects/fineweb-polygons/cache/uv-v10"
-export UV_PROJECT_ENVIRONMENT="/Volumes/Seagate M3/projects/fineweb-polygons/.venvs/fineweb-polygons-v10"
+export UV_CACHE_DIR="$FINEWEB_POLYGONS_DATA_ROOT/cache/uv"
+export UV_PROJECT_ENVIRONMENT="$FINEWEB_POLYGONS_DATA_ROOT/.venv"
 
 uv run fineweb-polygons filter-v10 \
-  --data-root "/Volumes/Seagate M3/projects/fineweb-polygons" \
-  --input "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
-  --output "/Volumes/Seagate M3/projects/fineweb-polygons/artifacts/v10-monaco-10bt-000-v1-landuse.jsonl" \
-  --manifest "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v10-monaco-10bt-000-v1/manifest.json" \
+  --data-root "$FINEWEB_POLYGONS_DATA_ROOT" \
+  --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
+  --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v10-monaco-10bt-000-v1-landuse.jsonl" \
+  --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v10-monaco-10bt-000-v1/manifest.json" \
   --model-path "/Volumes/Seagate M3/projects/osm-polygon-web-search/.hf-hub-cache-lfm-20260828/models--LiquidAI--LFM2.5-2.6B/snapshots/654f9463ce32b05d0429d76fe1f580b27d4c1ac0" \
-  --runtime-model-path "/Volumes/Seagate M3/projects/fineweb-polygons/models/lfm2.5-2.6b-mlx-q4" \
-  --checkpoint "/Volumes/Seagate M3/projects/fineweb-polygons/runs/v10-monaco-10bt-000-v1/checkpoint.jsonl"
+  --runtime-model-path "$FINEWEB_POLYGONS_DATA_ROOT/models/lfm2.5-2.6b-mlx-q4" \
+  --checkpoint "$FINEWEB_POLYGONS_DATA_ROOT/runs/v10-monaco-10bt-000-v1/checkpoint.jsonl"
 ```
 
 Repeat with the Liechtenstein V9 input and V10 output paths. V10 accepts only
@@ -272,6 +273,7 @@ just typecheck
 just test
 just crap
 just docs
+just package
 just mutation
 just qa
 ```

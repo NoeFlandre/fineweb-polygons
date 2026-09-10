@@ -6,32 +6,75 @@ post-processing stages over an earlier version's published rows. The
 version numbering stays contained in one place.
 """
 
-from fineweb_polygons.directions.retrieval.runs import (
-    RunSummary,
-    ScanRunConfig,
-    execute_run,
-)
-from fineweb_polygons.directions.retrieval.stages.v7 import (
-    V7RunConfig,
-    V7RunSummary,
-    run_v7,
-)
-from fineweb_polygons.directions.retrieval.stages.v8 import (
-    V8RunConfig,
-    V8RunSummary,
-    run_v8,
-)
-from fineweb_polygons.directions.retrieval.stages.v9 import (
-    V9RunConfig,
-    V9RunSummary,
-    run_v9,
-)
-from fineweb_polygons.directions.retrieval.stages.v10 import (
-    V10_MAX_NEW_TOKENS,
-    V10RunConfig,
-    V10RunSummary,
-    run_v10,
-)
+from importlib import import_module
+from typing import Any
+
+_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
+    "RunSummary": (
+        "fineweb_polygons.directions.retrieval.runs",
+        "RunSummary",
+    ),
+    "ScanRunConfig": (
+        "fineweb_polygons.directions.retrieval.runs",
+        "ScanRunConfig",
+    ),
+    "execute_run": (
+        "fineweb_polygons.directions.retrieval.runs",
+        "execute_run",
+    ),
+    "V7RunConfig": (
+        "fineweb_polygons.directions.retrieval.stages.v7",
+        "V7RunConfig",
+    ),
+    "V7RunSummary": (
+        "fineweb_polygons.directions.retrieval.stages.v7",
+        "V7RunSummary",
+    ),
+    "run_v7": (
+        "fineweb_polygons.directions.retrieval.stages.v7",
+        "run_v7",
+    ),
+    "V8RunConfig": (
+        "fineweb_polygons.directions.retrieval.stages.v8",
+        "V8RunConfig",
+    ),
+    "V8RunSummary": (
+        "fineweb_polygons.directions.retrieval.stages.v8",
+        "V8RunSummary",
+    ),
+    "run_v8": (
+        "fineweb_polygons.directions.retrieval.stages.v8",
+        "run_v8",
+    ),
+    "V9RunConfig": (
+        "fineweb_polygons.directions.retrieval.stages.v9",
+        "V9RunConfig",
+    ),
+    "V9RunSummary": (
+        "fineweb_polygons.directions.retrieval.stages.v9",
+        "V9RunSummary",
+    ),
+    "run_v9": (
+        "fineweb_polygons.directions.retrieval.stages.v9",
+        "run_v9",
+    ),
+    "V10_MAX_NEW_TOKENS": (
+        "fineweb_polygons.directions.retrieval.stages.v10",
+        "V10_MAX_NEW_TOKENS",
+    ),
+    "V10RunConfig": (
+        "fineweb_polygons.directions.retrieval.stages.v10",
+        "V10RunConfig",
+    ),
+    "V10RunSummary": (
+        "fineweb_polygons.directions.retrieval.stages.v10",
+        "V10RunSummary",
+    ),
+    "run_v10": (
+        "fineweb_polygons.directions.retrieval.stages.v10",
+        "run_v10",
+    ),
+}
 
 DIRECTION_ID = "direction-1-fineweb-retrieval"
 
@@ -54,3 +97,16 @@ __all__ = [
     "run_v9",
     "run_v10",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Load one public direction symbol only when it is first used."""
+    try:
+        module_name, attribute = _LAZY_EXPORTS[name]
+    except KeyError as error:
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}"
+        ) from error
+    value = getattr(import_module(module_name), attribute)
+    globals()[name] = value
+    return value

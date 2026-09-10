@@ -1532,3 +1532,92 @@ def test_cli_reports_v8_runner_errors_as_exit_code_two(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == f"error: {error}\n"
+
+
+def test_cli_rejects_unknown_runner_overrides_with_a_sorted_exact_message() -> None:
+    with pytest.raises(TypeError, match=r"\Aunknown runner override: alpha, zeta\Z"):
+        cli_module._reject_unknown_runners(
+            (),
+            {
+                "zeta": lambda config: config,
+                "alpha": lambda config: config,
+            },
+        )
+
+
+def test_cli_uses_the_registered_runner_when_no_override_is_given(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    captured = {}
+
+    def build_config(parsed, paths):
+        return paths
+
+    def runner(config):
+        captured["config"] = config
+        return RunSummary(
+            result_path=tmp_path / "result.jsonl",
+            manifest_path=tmp_path / "manifest.json",
+            partitions_completed=0,
+            partitions_skipped=0,
+            rows_scanned=0,
+            matches_written=0,
+        )
+
+    command = registry.Command(
+        name="fake",
+        help="fake",
+        direction=registry.RETRIEVAL.id,
+        produces=(),
+        arguments=(registry.Argument("--data-root", {"type": Path}),),
+        build_config=build_config,
+        runner=runner,
+        runner_keyword="fake_runner",
+        requires_external_root=False,
+    )
+    monkeypatch.setattr(cli_module, "commands", lambda: (command,))
+
+    assert cli_module.main(["fake", "--data-root", str(tmp_path)]) == 0
+    assert captured["config"].data_root == tmp_path
+    assert json.loads(capsys.readouterr().out)["matches_written"] == 0
+
+
+def test_main_uses_one_command_registry_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    registered = registry.commands()
+    calls = 0
+
+    def fake_commands():
+        nonlocal calls
+        calls += 1
+        return registered if calls == 1 else ()
+
+    monkeypatch.setattr(cli_module, "commands", fake_commands)
+    data_root = tmp_path / "external"
+
+    def fake_runner(config):
+        return RunSummary(
+            result_path=data_root / "artifacts" / "matches.jsonl",
+            manifest_path=data_root / "runs" / "case" / "manifest.json",
+            partitions_completed=0,
+            partitions_skipped=0,
+            rows_scanned=0,
+            matches_written=0,
+        )
+
+    assert (
+        main(
+            [
+                "scan",
+                "--data-root",
+                str(data_root),
+                "--shard",
+                str(data_root / "raw" / "shard.parquet"),
+            ],
+            runner=fake_runner,
+        )
+        == 0
+    )
+    assert calls == 1
+    capsys.readouterr()

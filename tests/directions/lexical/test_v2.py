@@ -682,15 +682,19 @@ def test_run_direction2_v2_counts_and_gates_specificity(
     config, _ = _make_v2_fixture(tmp_path)
     config = replace(config, log_path=tmp_path / "logs" / "résultats.jsonl")
     original_open = Path.open
+    log_encodings: list[object] = []
 
     def open_with_ascii_locale(self: Path, *args: Any, **kwargs: Any) -> Any:
         if self == config.log_path:
             kwargs["encoding"] = kwargs.get("encoding") or "ascii"
+            if args and args[0] == "w":
+                log_encodings.append(kwargs["encoding"])
         return original_open(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", open_with_ascii_locale)
     summary = run_direction2_v2(config)
 
+    assert log_encodings == ["utf-8"]
     assert summary.output_paths == (
         config.output_dir / "monaco.parquet",
         config.output_dir / "liechtenstein.parquet",

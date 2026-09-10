@@ -36,6 +36,16 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/fineweb_polygons"]
 
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "src",
+    "README.md",
+    "LICENSE",
+    "CITATION.cff",
+    "pyproject.toml",
+    "uv.lock",
+]
+
 [tool.pytest.ini_options]
 addopts = [
     "--strict-config",
@@ -57,6 +67,7 @@ data_file = "${COVERAGE_FILE-/Volumes/Seagate M3/projects/fineweb-polygons/.cove
 output = "${COVERAGE_JSON-/Volumes/Seagate M3/projects/fineweb-polygons/coverage.json}"
 
 [tool.coverage.report]
+fail_under = 98
 exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
@@ -75,7 +86,7 @@ quote-style = "double"
 
 [tool.mutmut]
 source_paths = ["src/fineweb_polygons"]
-also_copy = [".github/", "docs/", "metadata/", "mkdocs.yml", "scripts/"]
+also_copy = [".github/", "docs/", "metadata/", "justfile", "README.md", "mkdocs.yml", "scripts/", "tests/"]
 on_dependency_change = "rerun"
 pytest_add_cli_args = [
     "--no-cov",
