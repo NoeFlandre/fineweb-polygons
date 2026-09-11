@@ -51,6 +51,26 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "fineweb_polygons.directions.lexical.v2.pipeline",
         "run_direction2_v2",
     ),
+    "DIRECTION_V3_VERSION": (
+        "fineweb_polygons.directions.lexical.v3.models",
+        "DIRECTION_V3_VERSION",
+    ),
+    "HF_CONFIG_NAME_V3": (
+        "fineweb_polygons.directions.lexical.v3.models",
+        "HF_CONFIG_NAME_V3",
+    ),
+    "Direction2V3RunConfig": (
+        "fineweb_polygons.directions.lexical.v3.models",
+        "Direction2V3RunConfig",
+    ),
+    "Direction2V3RunSummary": (
+        "fineweb_polygons.directions.lexical.v3.models",
+        "Direction2V3RunSummary",
+    ),
+    "run_direction2_v3": (
+        "fineweb_polygons.directions.lexical.v3.pipeline",
+        "run_direction2_v3",
+    ),
 }
 
 DIRECTION_ID = "direction-2-lexical-candidates"
@@ -58,15 +78,20 @@ DIRECTION_ID = "direction-2-lexical-candidates"
 __all__ = [
     "DIRECTION_ID",
     "DIRECTION_V2_VERSION",
+    "DIRECTION_V3_VERSION",
     "DIRECTION_VERSION",
     "HF_CONFIG_NAME",
     "HF_CONFIG_NAME_V2",
+    "HF_CONFIG_NAME_V3",
     "Direction2RunConfig",
     "Direction2RunSummary",
     "Direction2V2RunConfig",
     "Direction2V2RunSummary",
+    "Direction2V3RunConfig",
+    "Direction2V3RunSummary",
     "run_direction2",
     "run_direction2_v2",
+    "run_direction2_v3",
 ]
 
 

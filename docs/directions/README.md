@@ -12,7 +12,7 @@ boundary: Direction 2's first version is `direction-2-lexical-v1`, not V11.
 | Direction | Status | Versions | Purpose |
 | --- | --- | --- | --- |
 | [Direction 1: FineWeb polygon retrieval](fineweb-retrieval/README.md) | Frozen | V1–V10 | Lexically retrieve FineWeb evidence for OSM polygon names, then narrow it to topic sentences and local-model `yes` sentences. |
-| [Direction 2: lexical polygon candidates](lexical-candidates/README.md) | Active POC | lexical-v1, lexical-v2 | Validate large-scale lexical candidate generation, then reduce generic-name noise with deterministic specificity rules. |
+| [Direction 2: lexical polygon candidates](lexical-candidates/README.md) | Active POC | lexical-v1, lexical-v2, lexical-v3 | Validate large-scale lexical candidate generation, then reduce generic-name noise with deterministic specificity and context evidence. |
 | [Direction 3: text to geographic footprint](text-geographic-footprint/README.md) | Planned | None yet | Start from geographic entities mentioned in text, recover their footprints, then relate topic evidence to OSM polygons. |
 
 The authoritative machine-readable form of this table is

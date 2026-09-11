@@ -8,21 +8,22 @@
   "readme": "docs/directions/lexical-candidates/README.md",
   "github": "https://github.com/NoeFlandre/fineweb-polygons",
   "huggingface": "https://huggingface.co/datasets/NoeFlandre/fineweb-polygons",
-  "latest_version": "direction-2-lexical-v2",
+  "latest_version": "direction-2-lexical-v3",
   "versions": [
     "direction-2-lexical-v1",
-    "direction-2-lexical-v2"
+    "direction-2-lexical-v2",
+    "direction-2-lexical-v3"
   ],
   "outputs": {
-    "hf_config": "direction_2_lexical_v2",
+    "hf_config": "direction_2_lexical_v3",
     "data_files": [
       {
         "split": "monaco",
-        "path": "data/direction-2-lexical/v2/monaco.parquet"
+        "path": "data/direction-2-lexical/v3/monaco.parquet"
       },
       {
         "split": "liechtenstein",
-        "path": "data/direction-2-lexical/v2/liechtenstein.parquet"
+        "path": "data/direction-2-lexical/v3/liechtenstein.parquet"
       }
     ]
   },
@@ -37,6 +38,19 @@
         {
           "split": "liechtenstein",
           "path": "data/direction-2-lexical/v1/liechtenstein.parquet"
+        }
+      ]
+    },
+    "direction-2-lexical-v2": {
+      "hf_config": "direction_2_lexical_v2",
+      "data_files": [
+        {
+          "split": "monaco",
+          "path": "data/direction-2-lexical/v2/monaco.parquet"
+        },
+        {
+          "split": "liechtenstein",
+          "path": "data/direction-2-lexical/v2/liechtenstein.parquet"
         }
       ]
     }

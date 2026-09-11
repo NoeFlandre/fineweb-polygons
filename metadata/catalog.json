@@ -273,7 +273,7 @@
       "package": "fineweb_polygons.directions.lexical",
       "readme": "docs/directions/lexical-candidates/README.md",
       "record": "metadata/directions/direction-2-lexical-candidates.json",
-      "latest_version": "direction-2-lexical-v2",
+      "latest_version": "direction-2-lexical-v3",
       "versions": [
         {
           "id": "direction-2-lexical-v1",
@@ -323,6 +323,32 @@
             "metadata/direction-2-lexical/v2/name-inventory.json"
           ],
           "card": "data/direction-2-lexical/v2/README.md"
+        },
+        {
+          "id": "direction-2-lexical-v3",
+          "summary": "Evidence-scored lexical candidates with auditable confidence tiers.",
+          "countries": [
+            "monaco",
+            "liechtenstein"
+          ],
+          "source_version": "direction-2-lexical-v2",
+          "huggingface_config": "direction_2_lexical_v3",
+          "data_files": [
+            {
+              "split": "monaco",
+              "path": "data/direction-2-lexical/v3/monaco.parquet"
+            },
+            {
+              "split": "liechtenstein",
+              "path": "data/direction-2-lexical/v3/liechtenstein.parquet"
+            }
+          ],
+          "metadata_files": [
+            "metadata/direction-2-lexical/v3/comparison-v2-v3.md",
+            "metadata/direction-2-lexical/v3/manifest.json",
+            "metadata/direction-2-lexical/v3/name-inventory.json"
+          ],
+          "card": "data/direction-2-lexical/v3/README.md"
         }
       ]
     },

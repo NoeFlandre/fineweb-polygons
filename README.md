@@ -76,6 +76,12 @@ configs:
         path: data/direction-2-lexical/v2/monaco.parquet
       - split: liechtenstein
         path: data/direction-2-lexical/v2/liechtenstein.parquet
+  - config_name: direction_2_lexical_v3
+    data_files:
+      - split: monaco
+        path: data/direction-2-lexical/v3/monaco.parquet
+      - split: liechtenstein
+        path: data/direction-2-lexical/v3/liechtenstein.parquet
 ---
 
 # FineWeb Polygons

@@ -15,10 +15,11 @@ Hugging Face configuration. Earlier versions stay immutable.
 | --- | --- | --- | --- |
 | `direction-2-lexical-v1` | [Broad lexical baseline](v1/README.md) | `directions/lexical/v1/` | `direction_2_lexical_v1` |
 | `direction-2-lexical-v2` | [Specificity-aware](v2/README.md) | `directions/lexical/v2/` | `direction_2_lexical_v2` |
+| `direction-2-lexical-v3` | [Evidence-scored candidates](v3/README.md) | `directions/lexical/v3/` | `direction_2_lexical_v3` |
 
 ## Shared machinery
 
-Everything both versions agree on lives directly in
+Everything shared by the lexical versions lives directly in
 `src/fineweb_polygons/directions/lexical/`: the OSM area reader (`osm.py`),
 the deterministic sentence windows (`sentences.py`), the Aho-Corasick matcher
 (`matching.py`), and the shared record shapes (`models.py`). A new version

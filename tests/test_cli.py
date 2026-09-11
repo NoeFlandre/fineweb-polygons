@@ -440,6 +440,63 @@ def test_direction2_v2_config_factory_uses_versioned_external_defaults(
     )
 
 
+def test_direction2_v3_config_factory_uses_versioned_external_defaults(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "external"
+    paths = cli_module._project_paths(data_root)
+    parsed = argparse.Namespace(
+        monaco_pbf=None,
+        liechtenstein_pbf=None,
+        shard=data_root / "raw/shard.parquet",
+        output_dir=None,
+        manifest=None,
+        dataset_card=None,
+        log=None,
+        name_inventory=None,
+        batch_size=8,
+        output_batch_size=4,
+    )
+
+    config = registry._lexical_v3_config(parsed, paths)
+
+    assert config.output_dir == data_root / "artifacts/direction-2/lexical-v3"
+    assert config.manifest_path == (
+        data_root / "runs/direction-2/lexical-v3/manifest.json"
+    )
+    assert config.dataset_card_path == (
+        data_root / "artifacts/direction-2/lexical-v3/dataset-card.md"
+    )
+    assert config.log_path == data_root / "logs/direction-2/lexical-v3/run.jsonl"
+    assert config.name_inventory_path == (
+        data_root / "runs/direction-2/lexical-v3/name-inventory.json"
+    )
+
+
+def test_direction2_v3_config_factory_preserves_explicit_inventory_path(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "external"
+    paths = cli_module._project_paths(data_root)
+    inventory = data_root / "custom" / "names.json"
+    parsed = argparse.Namespace(
+        monaco_pbf=None,
+        liechtenstein_pbf=None,
+        shard=data_root / "raw/shard.parquet",
+        output_dir=None,
+        manifest=None,
+        dataset_card=None,
+        log=None,
+        name_inventory=inventory,
+        batch_size=8,
+        output_batch_size=4,
+    )
+
+    config = registry._lexical_v3_config(parsed, paths)
+
+    assert config.name_inventory_path == inventory
+
+
 def test_cli_reports_unknown_commands_with_the_command_name(monkeypatch) -> None:
     class FakeParser:
         def parse_args(self, arguments):

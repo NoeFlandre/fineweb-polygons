@@ -14,7 +14,7 @@ metadata/<direction>/<version>/                 # manifests and side artifacts
 ```
 
 - `data/direction-1-retrieval/v1` … `v10` — Direction 1, frozen.
-- `data/direction-2-lexical/v1`, `v2` — Direction 2, active POC.
+- `data/direction-2-lexical/v1`, `v2`, `v3` — Direction 2, active POC.
 - `data/direction-3-text-geographic-footprint/` — reserved for Direction 3;
   no version or data file exists yet because the direction is still planned.
 

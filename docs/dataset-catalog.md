@@ -32,7 +32,7 @@ Documentation: [`docs/directions/fineweb-retrieval/README.md`](https://github.co
 
 ## Lexical polygon candidates
 
-**ID:** `direction-2-lexical-candidates` &middot; **Status:** active_poc &middot; **Latest:** `direction-2-lexical-v2`
+**ID:** `direction-2-lexical-candidates` &middot; **Status:** active_poc &middot; **Latest:** `direction-2-lexical-v3`
 
 Documentation: [`docs/directions/lexical-candidates/README.md`](https://github.com/NoeFlandre/fineweb-polygons/blob/main/docs/directions/lexical-candidates/README.md)
 
@@ -40,6 +40,7 @@ Documentation: [`docs/directions/lexical-candidates/README.md`](https://github.c
 | --- | --- | --- | --- | --- |
 | `direction-2-lexical-v1` | monaco, liechtenstein | `direction_2_lexical_v1` | `data/direction-2-lexical/v1/` | Broad all-area Aho-Corasick lexical baseline. |
 | `direction-2-lexical-v2` | monaco, liechtenstein | `direction_2_lexical_v2` | `data/direction-2-lexical/v2/` | Specificity-aware gating of generic names by measured reuse. |
+| `direction-2-lexical-v3` | monaco, liechtenstein | `direction_2_lexical_v3` | `data/direction-2-lexical/v3/` | Evidence-scored lexical candidates with auditable confidence tiers. |
 
 ## Text-to-geographic-footprint
 

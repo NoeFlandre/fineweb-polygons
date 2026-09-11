@@ -113,7 +113,7 @@ def test_public_paths_are_declared_once_and_read_by_the_registry() -> None:
         if re.search(r'"data/direction-', path.read_text(encoding="utf-8"))
     }
     allowed = {Path("registry.py")} | {
-        Path(f"directions/lexical/{name}/models.py") for name in ("v1", "v2")
+        Path(f"directions/lexical/{name}/models.py") for name in ("v1", "v2", "v3")
     }
 
     assert declaring <= allowed, (
@@ -125,10 +125,12 @@ def test_public_paths_are_declared_once_and_read_by_the_registry() -> None:
 def test_registry_prefixes_match_each_version_contract() -> None:
     from fineweb_polygons.directions.lexical.v1 import models as v1
     from fineweb_polygons.directions.lexical.v2 import models as v2
+    from fineweb_polygons.directions.lexical.v3 import models as v3
 
     declared = {
         v1.DIRECTION_VERSION: (v1.DATA_PREFIX, v1.HF_CONFIG_NAME),
         v2.DIRECTION_V2_VERSION: (v2.DATA_PREFIX, v2.HF_CONFIG_NAME_V2),
+        v3.DIRECTION_V3_VERSION: (v3.DATA_PREFIX, v3.HF_CONFIG_NAME_V3),
     }
     for version in registry.LEXICAL.versions:
         assert (version.data_prefix, version.hf_config) == declared[version.id]

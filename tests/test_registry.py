@@ -172,6 +172,50 @@ def test_lexical_facade_rejects_unknown_exports() -> None:
         getattr(lexical, unknown_name)
 
 
+def test_lexical_facade_exports_v3_lazily() -> None:
+    from fineweb_polygons.directions import lexical
+    from fineweb_polygons.directions.lexical.v3.models import (
+        DIRECTION_V3_VERSION,
+        Direction2V3RunConfig,
+    )
+
+    assert lexical.DIRECTION_V3_VERSION == DIRECTION_V3_VERSION
+    assert lexical.Direction2V3RunConfig is Direction2V3RunConfig
+    assert callable(lexical.run_direction2_v3)
+
+
+def test_direction2_v3_is_the_latest_registered_lexical_version() -> None:
+    direction = registry.LEXICAL
+    version = direction.latest_version
+
+    assert version is not None
+    assert version.id == "direction-2-lexical-v3"
+    assert version.hf_config == "direction_2_lexical_v3"
+    assert version.data_prefix == "data/direction-2-lexical/v3"
+    assert version.files == (
+        ("monaco", "monaco.parquet"),
+        ("liechtenstein", "liechtenstein.parquet"),
+    )
+    assert version.source_version == "direction-2-lexical-v2"
+    assert version.metadata_files() == (
+        "metadata/direction-2-lexical/v3/comparison-v2-v3.md",
+        "metadata/direction-2-lexical/v3/manifest.json",
+        "metadata/direction-2-lexical/v3/name-inventory.json",
+    )
+
+
+def test_direction2_v3_command_is_registered() -> None:
+    command = next(
+        command
+        for command in registry.commands()
+        if command.name == "direction2-lexical-v3"
+    )
+
+    assert command.direction == registry.LEXICAL.id
+    assert command.produces == ("direction-2-lexical-v3",)
+    assert command.runner_keyword == "direction2_v3_runner"
+
+
 def test_retrieval_facade_rejects_unknown_exports() -> None:
     from fineweb_polygons.directions import retrieval
 

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from fineweb_polygons.core.foundation import ProjectPaths, validate_data_path
 from fineweb_polygons.directions.lexical.v1 import models as lexical_v1
 from fineweb_polygons.directions.lexical.v2 import models as lexical_v2
+from fineweb_polygons.directions.lexical.v3 import models as lexical_v3
 from fineweb_polygons.directions.retrieval.stages.inference import (
     V10_MAX_NEW_TOKENS,
 )
@@ -292,6 +293,24 @@ LEXICAL = Direction(
             country_metadata=(),
             version_metadata=("manifest.json", "name-inventory.json"),
         ),
+        Version(
+            lexical_v3.DIRECTION_V3_VERSION,
+            "Evidence-scored lexical candidates with auditable confidence tiers.",
+            _BOTH,
+            lexical_v3.HF_CONFIG_NAME_V3,
+            lexical_v3.DATA_PREFIX,
+            (
+                ("monaco", "monaco.parquet"),
+                ("liechtenstein", "liechtenstein.parquet"),
+            ),
+            source_version=lexical_v2.DIRECTION_V2_VERSION,
+            country_metadata=(),
+            version_metadata=(
+                "comparison-v2-v3.md",
+                "manifest.json",
+                "name-inventory.json",
+            ),
+        ),
     ),
 )
 
@@ -469,6 +488,18 @@ def _lexical_v2_config(
     )
 
 
+def _lexical_v3_config(
+    parsed: argparse.Namespace, paths: ProjectPaths
+) -> lexical_v3.Direction2V3RunConfig:
+    slug = "direction-2/lexical-v3"
+    return lexical_v3.Direction2V3RunConfig(
+        **_lexical_defaults(parsed, paths, slug),
+        name_inventory_path=_lexical_path(
+            paths, parsed.name_inventory, paths.runs_dir / slug / "name-inventory.json"
+        ),
+    )
+
+
 def _lazy_runner(module_name: str, function_name: str) -> Callable[[Any], Any]:
     """Return a command runner that imports its implementation on demand."""
 
@@ -600,6 +631,21 @@ COMMANDS: tuple[Command, ...] = (
             "fineweb_polygons.directions.lexical.v2.pipeline", "run_direction2_v2"
         ),
         runner_keyword="direction2_v2_runner",
+    ),
+    Command(
+        name="direction2-lexical-v3",
+        help="score lexical candidates with deterministic context evidence",
+        direction=LEXICAL.id,
+        produces=("direction-2-lexical-v3",),
+        arguments=(
+            *_LEXICAL_ARGUMENTS,
+            Argument("--name-inventory", {"type": Path}),
+        ),
+        build_config=_lexical_v3_config,
+        runner=_lazy_runner(
+            "fineweb_polygons.directions.lexical.v3.pipeline", "run_direction2_v3"
+        ),
+        runner_keyword="direction2_v3_runner",
     ),
 )
 

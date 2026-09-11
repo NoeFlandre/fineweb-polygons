@@ -25,6 +25,7 @@ nav:
       - Overview: directions/lexical-candidates/README.md
       - "V1: broad lexical baseline": directions/lexical-candidates/v1/README.md
       - "V2: specificity-aware": directions/lexical-candidates/v2/README.md
+      - "V3: evidence-scored": directions/lexical-candidates/v3/README.md
   - "Direction 3: text to geographic footprint":
       - Overview: directions/text-geographic-footprint/README.md
   - Dataset catalog: dataset-catalog.md

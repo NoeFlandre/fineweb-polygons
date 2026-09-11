@@ -48,34 +48,23 @@ def score_candidate(
     other_polygon_name_nearby: bool,
 ) -> CandidateEvidence:
     """Score one occurrence using only deterministic lexical evidence."""
-    if not country_name.strip():
-        raise ValueError("country_name must not be empty")
-
-    name_in_url = has_context_marker(url, alias)
-    country_in_sentence = has_context_marker(sentence, country_name)
-    country_in_context = not country_in_sentence and has_context_marker(
-        context, country_name
+    _validate_country_name(country_name)
+    name_in_url, country_in_sentence, country_in_context = _text_signals(
+        alias=alias,
+        sentence=sentence,
+        context=context,
+        url=url,
+        country_name=country_name,
     )
-    distinctive = profile.decision.decision == "distinctive"
-    score = 2 if distinctive else 0
-    reasons: list[str] = []
-    if distinctive:
-        reasons.append("distinctive_name")
-    if name_in_url:
-        score += 3
-        reasons.append("name_in_url")
-    if country_in_sentence:
-        score += 3
-        reasons.append("country_in_sentence")
-    if country_in_context:
-        score += 1
-        reasons.append("country_in_context")
-    if same_polygon_alias_nearby:
-        score += 2
-        reasons.append("same_polygon_alias_nearby")
-    if other_polygon_name_nearby:
-        score += 1
-        reasons.append("other_polygon_name_nearby")
+    signals = _signals(
+        profile=profile,
+        name_in_url=name_in_url,
+        country_in_sentence=country_in_sentence,
+        country_in_context=country_in_context,
+        same_polygon_alias_nearby=same_polygon_alias_nearby,
+        other_polygon_name_nearby=other_polygon_name_nearby,
+    )
+    score, reasons = _score_signals(signals)
     return CandidateEvidence(
         name_in_url=name_in_url,
         country_in_sentence=country_in_sentence,
@@ -84,8 +73,55 @@ def score_candidate(
         other_polygon_name_nearby=other_polygon_name_nearby,
         score=score,
         tier=_tier(score),
-        reasons=tuple(reasons),
+        reasons=reasons,
     )
+
+
+def _validate_country_name(country_name: str) -> None:
+    if not country_name.strip():
+        raise ValueError("country_name must not be empty")
+
+
+def _text_signals(
+    *,
+    alias: str,
+    sentence: str,
+    context: str,
+    url: str,
+    country_name: str,
+) -> tuple[bool, bool, bool]:
+    name_in_url = has_context_marker(url, alias)
+    country_in_sentence = has_context_marker(sentence, country_name)
+    country_in_context = not country_in_sentence and has_context_marker(
+        context, country_name
+    )
+    return name_in_url, country_in_sentence, country_in_context
+
+
+def _signals(
+    *,
+    profile: NameProfile,
+    name_in_url: bool,
+    country_in_sentence: bool,
+    country_in_context: bool,
+    same_polygon_alias_nearby: bool,
+    other_polygon_name_nearby: bool,
+) -> tuple[tuple[str, int, bool], ...]:
+    return (
+        ("distinctive_name", 2, profile.decision.decision == "distinctive"),
+        ("name_in_url", 3, name_in_url),
+        ("country_in_sentence", 3, country_in_sentence),
+        ("country_in_context", 1, country_in_context),
+        ("same_polygon_alias_nearby", 2, same_polygon_alias_nearby),
+        ("other_polygon_name_nearby", 1, other_polygon_name_nearby),
+    )
+
+
+def _score_signals(
+    signals: tuple[tuple[str, int, bool], ...],
+) -> tuple[int, tuple[str, ...]]:
+    active = tuple((name, points) for name, points, enabled in signals if enabled)
+    return sum(points for _, points in active), tuple(name for name, _ in active)
 
 
 def _tier(score: int) -> DecisionTier:
