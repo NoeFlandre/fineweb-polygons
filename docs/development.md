@@ -6,6 +6,7 @@
 export FINEWEB_POLYGONS_DATA_ROOT="${FINEWEB_POLYGONS_DATA_ROOT:-/Volumes/Seagate M3/projects/fineweb-polygons}"
 export UV_CACHE_DIR="$FINEWEB_POLYGONS_DATA_ROOT/cache/uv"
 export UV_PROJECT_ENVIRONMENT="$FINEWEB_POLYGONS_DATA_ROOT/.venv"
+export FINEWEB_POLYGONS_MODEL_PATH="${FINEWEB_POLYGONS_MODEL_PATH:?set the local LFM model snapshot path}"
 uv sync --locked
 uv run pre-commit install
 ```
@@ -225,7 +226,7 @@ uv run fineweb-polygons filter-v10 \
   --input "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v9-monaco-10bt-000-v1-topic-sentences.jsonl" \
   --output "$FINEWEB_POLYGONS_DATA_ROOT/artifacts/v10-monaco-10bt-000-v1-landuse.jsonl" \
   --manifest "$FINEWEB_POLYGONS_DATA_ROOT/runs/v10-monaco-10bt-000-v1/manifest.json" \
-  --model-path "/Volumes/Seagate M3/projects/osm-polygon-web-search/.hf-hub-cache-lfm-20260828/models--LiquidAI--LFM2.5-2.6B/snapshots/654f9463ce32b05d0429d76fe1f580b27d4c1ac0" \
+  --model-path "$FINEWEB_POLYGONS_MODEL_PATH" \
   --runtime-model-path "$FINEWEB_POLYGONS_DATA_ROOT/models/lfm2.5-2.6b-mlx-q4" \
   --checkpoint "$FINEWEB_POLYGONS_DATA_ROOT/runs/v10-monaco-10bt-000-v1/checkpoint.jsonl"
 ```
@@ -271,9 +272,13 @@ just format-check
 just lint
 just typecheck
 just test
+just property
+just acceptance
+just architecture
 just crap
 just docs
 just package
+just smoke
 just mutation
 just qa
 ```

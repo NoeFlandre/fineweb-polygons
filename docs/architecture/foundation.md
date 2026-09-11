@@ -30,28 +30,30 @@ configured Seagate data root.
 
 ## Code organization
 
-The runner and V9 modules are stable compatibility façades. Their value objects
-live in focused modules so orchestration can evolve without changing imports:
+The public runners are compatibility façades over focused domain and I/O
+modules:
 
-- `artifact_io.py` owns stable JSONL writes, atomic text and JSON publication,
-  manifest reads, temporary sibling paths, and bounded file hashing for every
-  pipeline stage.
-- `run_models.py` owns scan configuration, summaries, partition identities, run
-  layout, and profile preparation records.
-- `runs.py` owns scan orchestration, matching wiring, checkpoints, and frequency
-  processing while re-exporting the historical runner names.
-- `v9_models.py` owns V9 configuration, summaries, and output counters.
-- `v9.py` owns V9 decoding, evidence selection, serialization, and manifest
-  coordination while re-exporting the historical V9 names.
-- `v10_models.py` owns V10 configuration, summaries, and the classifier
-  protocol.
-- `v10_inference.py` owns the model-runtime boundary, exact prompt rendering,
-  and strict yes/no parsing.
-- `v10.py` owns V9 candidate decoding, resumable classification checkpoints,
-  yes-only serialization, and model/prompt manifest coordination.
+- `core/foundation.py` owns the Seagate-backed project layout and path
+  validation; `core/normalization.py` owns shared text normalization.
+- `core/artifact_io.py` owns stable JSONL writes, atomic text and JSON
+  publication, manifest reads, temporary sibling paths, and bounded file
+  hashing for every pipeline stage.
+- `directions/retrieval/osm.py` and `directions/retrieval/scanning.py` own OSM
+  profile extraction and FineWeb row-group scanning. `retrieval/runs.py` owns
+  resumable scan orchestration, checkpoints, matching wiring, and frequency
+  processing.
+- `directions/retrieval/stages/v7.py`, `v8.py`, and `v9.py` own their
+  post-processing contracts. `stages/v10.py` owns resumable classification,
+  while `stages/inference.py` is the model-runtime boundary with exact prompt
+  rendering and strict yes/no parsing.
+- `directions/lexical/` owns the independent Direction 2 candidate-generation
+  POCs. Its `v3/pipeline.py` is the public orchestration boundary for that
+  direction and uses shared lexical matching and OSM readers.
+- `registry.py` composes public commands and versions. Direction modules do not
+  import the registry or one another.
 
 This boundary is intentionally small: it reduces coupling without introducing
-a new abstraction layer into the retrieval rules.
+a second abstraction layer into the retrieval rules.
 
 ## V2 profile and matching contract
 

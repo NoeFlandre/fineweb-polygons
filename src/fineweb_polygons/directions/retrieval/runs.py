@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -724,17 +725,19 @@ def _process_partition(
             output_path=partition_path,
             batch_size=config.batch_size,
         )
-    except Exception as error:
-        partition["status"] = "failed"
-        partition["error"] = str(error)
-        _atomic_json_write(layout.manifest_path, manifest)
-        _log(
-            layout.log_path,
-            "partition_failed",
-            partition=partition_spec.index,
-            error=str(error),
-        )
-        raise
+    finally:
+        error = sys.exc_info()[1]
+        if error is not None:
+            error_text = str(error)
+            partition["status"] = "failed"
+            partition["error"] = error_text
+            _atomic_json_write(layout.manifest_path, manifest)
+            _log(
+                layout.log_path,
+                "partition_failed",
+                partition=partition_spec.index,
+                error=error_text,
+            )
     partition["status"] = "complete"
     partition["stats"] = {
         "rows_scanned": stats.rows_scanned,

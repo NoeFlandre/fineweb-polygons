@@ -31,6 +31,8 @@ nav:
   - Dataset catalog: dataset-catalog.md
   - Architecture:
       - Foundation: architecture/foundation.md
+      - ADR: quality-boundaries.md
+  - Technical debt: technical-debt.md
   - Development: development.md
 
 markdown_extensions:

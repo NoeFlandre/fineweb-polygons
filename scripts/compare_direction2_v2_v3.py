@@ -6,6 +6,7 @@ import argparse
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TypedDict
 
 import pyarrow.parquet as pq
 
@@ -18,6 +19,40 @@ _V3_COLUMNS = (
     "evidence_score",
     "evidence_reasons",
 )
+
+
+class _V3Row(TypedDict):
+    polygon_id: object
+    matched_alias: object
+    fineweb_url: object
+    sentence: object
+    polygon_name: object
+    name_match_class: object
+    decision_tier: object
+    evidence_score: object
+    evidence_reasons: object
+
+
+class _Sample(TypedDict):
+    name: object
+    url: object
+    sentence: str
+    score: object
+    reasons: object
+
+
+class _Summary(TypedDict):
+    rows: int
+    unique_polygons: int
+    duplicate_rows: int
+    tiers: Counter[str]
+    classes: Counter[str]
+    top_names: list[tuple[str, int]]
+    high_names: list[tuple[str, int]]
+    high_reasons: list[tuple[str, int]]
+    high_generic_rows: int
+    high_rows: int
+    sample: list[_Sample]
 
 
 def _arguments() -> argparse.Namespace:
@@ -35,14 +70,24 @@ def _read_v2(path: Path) -> list[tuple[object, ...]]:
     ]
 
 
-def _read_v3(path: Path) -> list[dict[str, object]]:
+def _read_v3(path: Path) -> list[_V3Row]:
     return [
-        {column: row[column] for column in _V3_COLUMNS}
+        _V3Row(
+            polygon_id=row["polygon_id"],
+            matched_alias=row["matched_alias"],
+            fineweb_url=row["fineweb_url"],
+            sentence=row["sentence"],
+            polygon_name=row["polygon_name"],
+            name_match_class=row["name_match_class"],
+            decision_tier=row["decision_tier"],
+            evidence_score=row["evidence_score"],
+            evidence_reasons=row["evidence_reasons"],
+        )
         for row in pq.read_table(path, columns=list(_V3_COLUMNS)).to_pylist()
     ]
 
 
-def _counts(rows: Sequence[dict[str, object]]) -> dict[str, object]:
+def _counts(rows: Sequence[_V3Row]) -> _Summary:
     tiers = Counter(str(row["decision_tier"]) for row in rows)
     classes = Counter(str(row["name_match_class"]) for row in rows)
     names = Counter(str(row["polygon_name"]) for row in rows)
@@ -65,17 +110,15 @@ def _counts(rows: Sequence[dict[str, object]]) -> dict[str, object]:
     }
 
 
-def _row_key(row: dict[str, object]) -> tuple[object, ...]:
+def _row_key(row: _V3Row) -> tuple[object, ...]:
     return tuple(row[column] for column in _KEY_COLUMNS)
 
 
-def _sample(
-    rows: Sequence[dict[str, object]], limit: int = 5
-) -> list[dict[str, object]]:
+def _sample(rows: Sequence[_V3Row], limit: int = 5) -> list[_Sample]:
     ordered = sorted(
         rows,
         key=lambda row: (
-            -int(row["evidence_score"]),
+            -_as_int(row["evidence_score"]),
             str(row["polygon_name"]),
             str(row["fineweb_url"]),
             str(row["sentence"]),
@@ -93,6 +136,13 @@ def _sample(
     ]
 
 
+def _as_int(value: object) -> int:
+    """Convert values emitted by PyArrow while rejecting malformed records."""
+    if isinstance(value, (int, float, str, bytes, bytearray)):
+        return int(value)
+    raise TypeError(f"expected an integer-like value, got {type(value).__name__}")
+
+
 def _shorten(value: str, limit: int = 240) -> str:
     return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
 
@@ -106,7 +156,7 @@ def _format_pairs(value: list[tuple[str, int]]) -> str:
 
 
 def _render(
-    summaries: dict[str, dict[str, object]],
+    summaries: dict[str, _Summary],
     *,
     multiset_equal: bool,
 ) -> str:
@@ -184,8 +234,8 @@ def _render(
     return "\n".join(lines)
 
 
-def _compare(v2_dir: Path, v3_dir: Path) -> tuple[dict[str, dict[str, object]], bool]:
-    summaries: dict[str, dict[str, object]] = {}
+def _compare(v2_dir: Path, v3_dir: Path) -> tuple[dict[str, _Summary], bool]:
+    summaries: dict[str, _Summary] = {}
     multiset_equal = True
     for source in ("monaco", "liechtenstein"):
         v2_rows = _read_v2(v2_dir / f"{source}.parquet")

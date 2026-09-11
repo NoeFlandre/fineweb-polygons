@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import re
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from fineweb_polygons import registry
 
 _SOURCE_ROOT = Path(registry.__file__).resolve().parent
 _PACKAGE = "fineweb_polygons"
+pytestmark = pytest.mark.architecture
 
 
 def _modules(relative: str) -> list[Path]:
@@ -34,6 +36,35 @@ def _direction_modules() -> list[Path]:
     )
 
 
+def _module_name(path: Path) -> str:
+    relative = path.relative_to(_SOURCE_ROOT).with_suffix("")
+    parts = relative.parts
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join((_PACKAGE, *parts))
+
+
+def _source_dependencies() -> dict[str, set[str]]:
+    paths = sorted(_SOURCE_ROOT.rglob("*.py"))
+    known = {_module_name(path) for path in paths}
+    dependencies: dict[str, set[str]] = {}
+    for path in paths:
+        imported = _imported_packages(path)
+        dependencies[_module_name(path)] = {
+            candidate for name in imported for candidate in _parent_modules(name, known)
+        }
+    return dependencies
+
+
+def _parent_modules(name: str, known: set[str]) -> tuple[str, ...]:
+    parts = name.split(".")
+    return tuple(
+        ".".join(parts[:index])
+        for index in range(len(parts), 1, -1)
+        if ".".join(parts[:index]) in known
+    )[:1]
+
+
 def _imported_packages(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported: set[str] = set()
@@ -43,6 +74,13 @@ def _imported_packages(path: Path) -> set[str]:
         elif isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
     return {name for name in imported if name.startswith(_PACKAGE)}
+
+
+def test_source_import_graph_is_acyclic() -> None:
+    try:
+        tuple(TopologicalSorter(_source_dependencies()).static_order())
+    except CycleError as error:
+        pytest.fail(f"source import cycle detected: {error}")
 
 
 @pytest.mark.parametrize("module", _modules("core"), ids=lambda p: p.name)

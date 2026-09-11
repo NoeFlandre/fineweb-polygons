@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,9 @@ _WORKFLOW_PATH = _REPOSITORY_ROOT / ".github" / "workflows" / "quality.yml"
 _JUSTFILE_PATH = _REPOSITORY_ROOT / "justfile"
 _MKDOCS_PATH = _REPOSITORY_ROOT / "mkdocs.yml"
 _PYPROJECT_PATH = _REPOSITORY_ROOT / "pyproject.toml"
+_DOCKERIGNORE_PATH = _REPOSITORY_ROOT / ".dockerignore"
+_DEVELOPMENT_DOC_PATH = _REPOSITORY_ROOT / "docs" / "development.md"
+_FOUNDATION_DOC_PATH = _REPOSITORY_ROOT / "docs" / "architecture" / "foundation.md"
 _SEAGATE_ROOT = "/Volumes/Seagate M3/projects/fineweb-polygons"
 
 
@@ -70,9 +74,25 @@ def test_justfile_has_one_configurable_data_root() -> None:
     assert ".venvs/fineweb-polygons-v8" not in justfile
     assert 'uv build --out-dir "{{ data_root }}/dist"' in justfile
     assert (
-        "qa: format-check lint typecheck catalog-check crap docs package"
+        "qa: format-check lint typecheck catalog-check test property acceptance "
+        "architecture crap docs package mutation smoke"
         in justfile
     )
+
+
+def test_justfile_types_all_checked_code_and_exposes_quality_lanes() -> None:
+    justfile = _JUSTFILE_PATH.read_text(encoding="utf-8")
+
+    assert "uv run ty check src tests scripts" in justfile
+    for target in ("property:", "acceptance:", "architecture:", "smoke:"):
+        assert f"\n{target}" in justfile
+
+
+def test_pytest_registers_explicit_verification_markers() -> None:
+    pyproject = _PYPROJECT_PATH.read_text(encoding="utf-8")
+
+    for marker in ("acceptance", "architecture", "property"):
+        assert f'"{marker}:' in pyproject
 
 
 def test_source_distribution_has_an_explicit_allowlist() -> None:
@@ -97,6 +117,44 @@ def test_mkdocs_default_site_directory_is_portable() -> None:
 
     assert "site_dir: site" in mkdocs
     assert _SEAGATE_ROOT not in mkdocs
+
+
+def test_docker_context_excludes_local_research_and_build_artifacts() -> None:
+    dockerignore = _DOCKERIGNORE_PATH.read_text(encoding="utf-8").splitlines()
+
+    for entry in (
+        "archive",
+        "artifacts",
+        "cache",
+        "dist",
+        ".hypothesis",
+        ".pytest_cache",
+        ".ruff_cache",
+        "logs",
+        "models",
+        "quality",
+        "raw",
+        "runs",
+        "site",
+        "tmp",
+        ".uv-cache-quality",
+        ".venv-quality",
+    ):
+        assert entry in dockerignore
+
+
+def test_model_documentation_does_not_reference_another_checkout() -> None:
+    development = _DEVELOPMENT_DOC_PATH.read_text(encoding="utf-8")
+
+    assert "FINEWEB_POLYGONS_MODEL_PATH" in development
+    assert "osm-polygon-web-search" not in development
+
+
+def test_architecture_documentation_names_real_modules() -> None:
+    foundation = _FOUNDATION_DOC_PATH.read_text(encoding="utf-8")
+
+    for stale_module in ("run_models.py", "v9_models.py", "v10_models.py", "v10_inference.py"):
+        assert stale_module not in foundation
 
 
 def test_mutation_workflow_runs_the_fail_closed_gate() -> None:
@@ -126,6 +184,26 @@ def test_quality_workflow_exposes_repository_import_paths() -> None:
     assert "PYTHONPATH: src:." in workflow
 
 
+def test_quality_workflow_runs_all_explicit_verification_lanes() -> None:
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    for command in (
+        "uv run ty check src tests scripts",
+        "uv run pytest --no-cov -m property",
+        "uv run pytest --no-cov -m acceptance",
+        "uv run pytest --no-cov -m architecture",
+        "uv run fineweb-polygons",
+    ):
+        assert command in workflow
+
+
+def test_quality_workflow_smoke_tests_the_docker_runtime() -> None:
+    workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "docker build --tag fineweb-polygons:ci ." in workflow
+    assert "docker run --rm fineweb-polygons:ci" in workflow
+
+
 def test_quality_workflow_writes_docs_to_runner_workspace() -> None:
     workflow = _WORKFLOW_PATH.read_text(encoding="utf-8")
 
@@ -136,11 +214,11 @@ def test_quality_workflow_writes_docs_to_runner_workspace() -> None:
 
 
 def test_mutation_checkout_copies_justfile() -> None:
-    pyproject = _PYPROJECT_PATH.read_text(encoding="utf-8")
+    config = tomllib.loads(_PYPROJECT_PATH.read_text(encoding="utf-8"))
+    also_copy = config["tool"]["mutmut"]["also_copy"]
 
-    also_copy = next(
-        line for line in pyproject.splitlines() if line.startswith("also_copy = ")
-    )
-    assert "\"justfile\"" in also_copy
-    assert "\"README.md\"" in also_copy
-    assert "\"tests/\"" in also_copy
+    assert "justfile" in also_copy
+    assert "Dockerfile" in also_copy
+    assert ".dockerignore" in also_copy
+    assert "README.md" in also_copy
+    assert "tests/" in also_copy

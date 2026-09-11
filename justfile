@@ -22,10 +22,19 @@ lint:
     uv run ruff check .
 
 typecheck:
-    uv run ty check src tests
+    uv run ty check src tests scripts
 
 test:
     uv run pytest
+
+property:
+    uv run pytest --no-cov -m property
+
+acceptance:
+    uv run pytest --no-cov -m acceptance
+
+architecture:
+    uv run pytest --no-cov -m architecture
 
 docs:
     uv run mkdocs build --strict --site-dir "{{ data_root }}/site"
@@ -70,4 +79,7 @@ lexical-v2 shard="{{data_root}}/raw/fineweb/sample/10BT/000_00000.parquet":
 package:
     uv build --out-dir "{{ data_root }}/dist"
 
-qa: format-check lint typecheck catalog-check crap docs package
+smoke:
+    uv run fineweb-polygons
+
+qa: format-check lint typecheck catalog-check test property acceptance architecture crap docs package mutation smoke

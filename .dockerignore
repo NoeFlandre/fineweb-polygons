@@ -3,7 +3,22 @@
 .venv
 .mutmut-cache
 mutants
+archive
+cache
+dist
+.hypothesis
+.pytest_cache
+.ruff_cache
+models
+quality
+raw
+runs
+logs
+artifacts
 site
+tmp
+.uv-cache-quality
+.venv-quality
 coverage.json
 .coverage
 __pycache__
@@ -16,7 +31,4 @@ __pycache__
 .DS_Store
 
 data
-runs
-logs
-artifacts
 checkpoints

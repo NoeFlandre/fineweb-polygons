@@ -52,6 +52,9 @@ archive/
 cache/
 models/
 quality/
+# Keep quality output ignored while versioning quality tests.
+!tests/quality/
+!tests/quality/*.py
 tmp/
 site-*/
 coverage-*

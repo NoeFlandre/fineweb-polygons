@@ -60,9 +60,8 @@ def atomic_json_write(
             encoding="utf-8",
         )
         os.replace(temporary, path)
-    except BaseException:
+    finally:
         temporary.unlink(missing_ok=True)
-        raise
 
 
 @contextmanager
@@ -83,9 +82,8 @@ def atomic_text_output(
         with stream as output:
             yield output
         os.replace(temporary, path)
-    except BaseException:
+    finally:
         temporary.unlink(missing_ok=True)
-        raise
 
 
 def read_json_object(path: Path) -> dict[str, Any] | None:
