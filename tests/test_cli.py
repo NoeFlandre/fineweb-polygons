@@ -21,6 +21,13 @@ from fineweb_polygons.directions.retrieval.stages.v9 import V9RunSummary
 from fineweb_polygons.directions.retrieval.stages.v10 import V10RunSummary
 
 
+@pytest.fixture(autouse=True)
+def isolated_cli_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
+
+
 def test_cli_reports_foundation_only(capsys) -> None:
     assert main([]) == 0
 

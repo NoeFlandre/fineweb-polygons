@@ -6,37 +6,45 @@ UV_CACHE_DIR := data_root + "/cache/uv"
 UV_PROJECT_ENVIRONMENT := data_root + "/.venv"
 COVERAGE_FILE := data_root + "/.coverage"
 COVERAGE_JSON := data_root + "/coverage.json"
+TMPDIR := data_root + "/tmp/qa"
+PRE_COMMIT_HOME := data_root + "/cache/pre-commit"
 
 default: qa
 
-sync:
+prepare:
+    mkdir -p "{{ TMPDIR }}"
+
+lock-check: prepare
+    uv lock --check
+
+sync: prepare
     uv sync --locked
 
-format:
-    uv run ruff format .
+format: prepare
+    uv run ruff format src tests scripts
 
-format-check:
-    uv run ruff format --check .
+format-check: prepare
+    uv run ruff format --check src tests scripts
 
-lint:
-    uv run ruff check .
+lint: prepare
+    uv run ruff check src tests scripts
 
-typecheck:
+typecheck: prepare
     uv run ty check src tests scripts
 
-test:
+test: prepare
     uv run pytest
 
-property:
+property: prepare
     uv run pytest --no-cov -m property
 
-acceptance:
+acceptance: prepare
     uv run pytest --no-cov -m acceptance
 
-architecture:
+architecture: prepare
     uv run pytest --no-cov -m architecture
 
-docs:
+docs: prepare
     uv run mkdocs build --strict --site-dir "{{ data_root }}/site"
 
 catalog:
@@ -48,7 +56,7 @@ catalog-check:
 crap: test
     uv run python scripts/check_crap.py --source src --coverage "{{ COVERAGE_JSON }}" --max-crap 6
 
-mutation:
+mutation: prepare
     uv run mutmut run --max-children 1
     uv run python scripts/check_mutation.py
 
@@ -76,10 +84,10 @@ lexical-v1 shard="{{data_root}}/raw/fineweb/sample/10BT/000_00000.parquet":
 lexical-v2 shard="{{data_root}}/raw/fineweb/sample/10BT/000_00000.parquet":
     uv run fineweb-polygons direction2-lexical-v2 --data-root "{{ data_root }}" --shard "{{ shard }}"
 
-package:
+package: prepare
     uv build --out-dir "{{ data_root }}/dist"
 
-smoke:
+smoke: prepare
     uv run fineweb-polygons
 
-qa: format-check lint typecheck catalog-check test property acceptance architecture crap docs package mutation smoke
+qa: lock-check format-check lint typecheck catalog-check test property acceptance architecture crap docs package mutation smoke

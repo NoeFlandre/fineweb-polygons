@@ -1445,8 +1445,38 @@ def test_process_partition_records_running_and_complete_states(
     }
 
 
-def test_process_partition_records_failure_state_and_error(
+def test_successful_partition_ignores_an_outer_handled_exception(
     tmp_path: Path, monkeypatch
+) -> None:
+    config, shard = make_config(tmp_path)
+    layout = _RunLayout.from_config(config)
+    manifest = {"partitions": [{"status": "pending"}]}
+    monkeypatch.setattr(
+        runs_module, "scan_row_groups", lambda *args, **kwargs: ScanStats(4, 2)
+    )
+
+    try:
+        raise ValueError("unrelated caller failure")
+    except ValueError:
+        runs_module._process_partition(
+            config=config,
+            layout=layout,
+            manifest=manifest,
+            partition_spec=_Partition(0, (_RowGroup(0, 0, 4),)),
+            shard_path=shard,
+            matcher=runs_module.EvidenceMatcher([]),
+        )
+
+    assert "error" not in manifest["partitions"][0]
+    events = [
+        json.loads(line)["event"] for line in layout.log_path.read_text().splitlines()
+    ]
+    assert events == ["partition_complete"]
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, KeyboardInterrupt, SystemExit])
+def test_process_partition_records_failure_state_and_error(
+    tmp_path: Path, monkeypatch, error_type: type[BaseException]
 ) -> None:
     config, shard = make_config(tmp_path)
     layout = _RunLayout.from_config(config)
@@ -1461,11 +1491,11 @@ def test_process_partition_records_failure_state_and_error(
 
     def failing_scan(path, **kwargs):
         del path, kwargs
-        raise RuntimeError("scan failed")
+        raise error_type("scan failed")
 
     monkeypatch.setattr(runs_module, "scan_row_groups", failing_scan)
 
-    with pytest.raises(RuntimeError, match=r"\Ascan failed\Z"):
+    with pytest.raises(error_type, match=r"\Ascan failed\Z"):
         runs_module._process_partition(
             config=config,
             layout=layout,

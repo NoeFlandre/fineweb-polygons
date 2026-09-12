@@ -86,7 +86,7 @@ target-version = "py312"
 src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
-select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
+select = ["B", "BLE", "E", "F", "I", "RUF", "SIM", "UP"]
 
 [tool.ruff.format]
 quote-style = "double"

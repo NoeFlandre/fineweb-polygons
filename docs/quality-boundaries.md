@@ -15,6 +15,12 @@ metadata are versioned in GitHub.
 - Keep filesystem, hashing, atomic publication, and project-root policy behind
   the `core` I/O and foundation modules.
 - Keep directions independent; compose public commands through `registry.py`.
+- Resolve relative imports and imported module names when checking dependencies.
+- Use explicit exception handlers at orchestration boundaries to record failure
+  and re-raise it, including interruptions. Do not infer a local failure from
+  ambient exception state: a caller may already be handling an unrelated error.
+  Ruff checks for swallowed broad exceptions; a blanket ban on broad handlers
+  would prevent legitimate failure recording and cleanup.
 - Require explicit property, acceptance, architecture, typing, coverage/CRAP,
   mutation, packaging, documentation, and smoke checks in the quality workflow.
 - Keep the Seagate path as the deliberate default data root, with
@@ -28,3 +34,8 @@ The quality gates are visible and repeatable, and failed writes cannot publish
 partial artifacts. The Seagate default is intentionally platform-specific for
 this workstation; portable execution must provide an explicit data-root
 override. New behavior still requires a new version or direction contract.
+
+Quality commands route temporary files and caches through the configured data
+root. CLI tests create their own working directory so test placement does not
+change the external-data validation contract. Hypothesis uses deterministic
+generation for repeatable replay with the locked dependency versions.

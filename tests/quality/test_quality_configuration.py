@@ -66,17 +66,17 @@ def test_justfile_has_one_configurable_data_root() -> None:
     justfile = _JUSTFILE_PATH.read_text(encoding="utf-8")
 
     assert (
-        f'data_root := env_var_or_default("FINEWEB_POLYGONS_DATA_ROOT", "{_SEAGATE_ROOT}")'
-        in justfile
+        'data_root := env_var_or_default("FINEWEB_POLYGONS_DATA_ROOT", '
+        f'"{_SEAGATE_ROOT}")' in justfile
     )
     assert justfile.count(_SEAGATE_ROOT) == 1
     assert "cache/uv-cleanup" not in justfile
     assert ".venvs/fineweb-polygons-v8" not in justfile
     assert 'uv build --out-dir "{{ data_root }}/dist"' in justfile
     assert (
-        "qa: format-check lint typecheck catalog-check test property acceptance "
-        "architecture crap docs package mutation smoke"
-        in justfile
+        "qa: lock-check format-check lint typecheck catalog-check "
+        "test property acceptance "
+        "architecture crap docs package mutation smoke" in justfile
     )
 
 
@@ -85,7 +85,7 @@ def test_justfile_types_all_checked_code_and_exposes_quality_lanes() -> None:
 
     assert "uv run ty check src tests scripts" in justfile
     for target in ("property:", "acceptance:", "architecture:", "smoke:"):
-        assert f"\n{target}" in justfile
+        assert f"\n{target} prepare" in justfile
 
 
 def test_pytest_registers_explicit_verification_markers() -> None:
@@ -100,9 +100,9 @@ def test_source_distribution_has_an_explicit_allowlist() -> None:
 
     assert "[tool.hatch.build.targets.sdist]" in pyproject
     assert "only-include = [" in pyproject
-    assert "\"src\"" in pyproject
-    assert "\"README.md\"" in pyproject
-    assert "\"LICENSE\"" in pyproject
+    assert '"src"' in pyproject
+    assert '"README.md"' in pyproject
+    assert '"LICENSE"' in pyproject
 
 
 def test_coverage_has_a_high_minimum_threshold() -> None:
@@ -153,7 +153,12 @@ def test_model_documentation_does_not_reference_another_checkout() -> None:
 def test_architecture_documentation_names_real_modules() -> None:
     foundation = _FOUNDATION_DOC_PATH.read_text(encoding="utf-8")
 
-    for stale_module in ("run_models.py", "v9_models.py", "v10_models.py", "v10_inference.py"):
+    for stale_module in (
+        "run_models.py",
+        "v9_models.py",
+        "v10_models.py",
+        "v10_inference.py",
+    ):
         assert stale_module not in foundation
 
 

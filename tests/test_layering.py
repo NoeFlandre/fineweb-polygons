@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import re
 from graphlib import CycleError, TopologicalSorter
+from importlib.util import resolve_name
 from pathlib import Path
 
 import pytest
@@ -69,11 +70,35 @@ def _imported_packages(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imported: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
+        if isinstance(node, ast.ImportFrom):
+            package = _module_name(path)
+            if path.name != "__init__.py":
+                package = package.rpartition(".")[0]
+            name = resolve_name("." * node.level + (node.module or ""), package)
+            imported.add(name)
+            imported.update(f"{name}.{alias.name}" for alias in node.names)
         elif isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
     return {name for name in imported if name.startswith(_PACKAGE)}
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "from ..directions import lexical",
+        "from fineweb_polygons.directions import lexical",
+        "import fineweb_polygons.directions.lexical",
+    ),
+)
+def test_import_analysis_detects_equivalent_dependency_spellings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, statement: str
+) -> None:
+    monkeypatch.setattr(__import__(__name__), "_SOURCE_ROOT", tmp_path)
+    module = tmp_path / "core" / "probe.py"
+    module.parent.mkdir()
+    module.write_text(statement, encoding="utf-8")
+
+    assert "fineweb_polygons.directions.lexical" in _imported_packages(module)
 
 
 def test_source_import_graph_is_acyclic() -> None:
