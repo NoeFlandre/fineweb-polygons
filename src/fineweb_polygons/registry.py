@@ -132,10 +132,6 @@ class Command:
     )
 
 
-# --------------------------------------------------------------------------
-# Direction 1 - FineWeb polygon retrieval (frozen at V10)
-# --------------------------------------------------------------------------
-
 _RETRIEVAL_PREFIX = "data/direction-1-retrieval"
 _BOTH = ("monaco", "liechtenstein")
 
@@ -256,10 +252,6 @@ RETRIEVAL = Direction(
 )
 
 
-# --------------------------------------------------------------------------
-# Direction 2 - lexical polygon candidates (active POC)
-# --------------------------------------------------------------------------
-
 LEXICAL = Direction(
     id="direction-2-lexical-candidates",
     name="Lexical polygon candidates",
@@ -314,10 +306,6 @@ LEXICAL = Direction(
     ),
 )
 
-# --------------------------------------------------------------------------
-# Direction 3 - text to geographic footprint (planned)
-# --------------------------------------------------------------------------
-
 GEOGRAPHIC_FOOTPRINT = Direction(
     id="direction-3-text-geographic-footprint",
     name="Text-to-geographic-footprint",
@@ -337,10 +325,6 @@ def direction(direction_id: str) -> Direction:
             return candidate
     raise KeyError(f"unknown direction: {direction_id}")
 
-
-# --------------------------------------------------------------------------
-# Command-line surface
-# --------------------------------------------------------------------------
 
 _DATA_ROOT = Argument("--data-root", {"type": Path})
 _STAGE_ARGUMENTS = (
